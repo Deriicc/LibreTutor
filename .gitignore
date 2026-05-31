@@ -1,0 +1,47 @@
+# Claude Code / AI tooling (internal, not for repo)
+.claude/
+.agents/
+.kiro/
+.scratch/
+.understand-anything/
+skills-lock.json
+CLAUDE.md
+CONTEXT.md
+AGENTS.md
+BUGS_TODO.md
+handoff/
+docs/agents/
+docs/ebook/
+paper/
+scripts/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# App data
+uploads/
+assets/
+
+# Personal academic writing — NOT project, must never enter the repo
+毕业论文*.md

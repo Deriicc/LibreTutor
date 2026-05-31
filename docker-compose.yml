@@ -1,0 +1,75 @@
+# Self-hosted production stack (Debian 13 + Docker Compose + Caddy).
+# Reuses the repo Dockerfile as-is. Railway is unaffected — it ignores
+# this file. See DEPLOY.server.md for the step-by-step.
+#
+#   cp .env.example .env   # then fill it in
+#   docker compose up -d --build
+
+services:
+  db:
+    # pgvector-enabled Postgres: a migration runs CREATE EXTENSION vector,
+    # which the stock postgres image does not ship. Official pgvector image,
+    # based on the Debian postgres:16.
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # $$ escapes compose interpolation so the var expands inside the container.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      PRODUCTION: "true"
+      # Persist uploads on a volume; the app's default upload_dir is the
+      # relative "uploads", so point it at the mounted path explicitly.
+      UPLOAD_DIR: /data/uploads
+      # Single source of truth for DB creds: built from the POSTGRES_* above.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    # Override the image CMD to trust Caddy's forwarded headers so the app
+    # logs the real client IP behind the proxy (--proxy-headers +
+    # --forwarded-allow-ips=*). The app port is never published — only
+    # Caddy (on this network) reaches it.
+    command:
+      - bash
+      - -c
+      - alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips=*
+    volumes:
+      - uploads:/data/uploads
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:

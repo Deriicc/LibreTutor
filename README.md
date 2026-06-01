@@ -1,31 +1,96 @@
-# Self-Learning System
+# LibreTutor
 
-AI tutoring system. You upload a textbook (PDF or Markdown), the backend builds a fixed course tree, and you study each KnowledgePoint through Socratic dialogue, assessment, tailored exercises, grading, retry, and a teacher diary.
+<p align="center">
+  <strong>A self-hosted AI tutor for turning books and notes into guided lessons.</strong>
+</p>
 
-This is the **single-user, self-hosted** edition: clone it, set your API key on the in-app Settings page, and use it. No accounts, no login, no admin panel.
+<p align="center">
+  <a href="README.zh-CN.md">中文</a>
+  ·
+  <a href="DEPLOY.md">Deployment</a>
+  ·
+  <a href="DEPLOY.zh-CN.md">中文部署</a>
+</p>
 
-## Tech Stack
+<p align="center">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=111827">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL%20%2B%20pgvector-4169E1?style=flat-square&logo=postgresql&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white">
+</p>
 
-| Layer | Technology |
-|-------|------------|
-| Backend | FastAPI + async SQLAlchemy + PostgreSQL 16 + pgvector |
-| Frontend | React 18 + TypeScript + Vite (`frontend/`, port 5173) |
-| LLM | OpenAI-compatible chat settings from the in-app Settings page |
-| Embeddings | OpenAI-compatible embedding settings; hash embedding fallback if absent |
-| Parsing | PyMuPDF for PDF, Markdown virtual pages for `.md` / `.markdown` |
+LibreTutor is a single-user, bring-your-own-key learning workspace. Upload a PDF, EPUB, or Markdown file; LibreTutor reads the structure, builds a lesson path, and guides you through each lesson with an AI tutor, dialogue-based assessment, tailored exercises, grading, and a reflective tutor journal.
 
-## Prerequisites
+It is designed for private study, independent reading, and serious self-learning. No hosted account layer, no platform lock-in.
 
-- Ubuntu / WSL2
-- PostgreSQL 16 + pgvector
-- Python 3.11+
-- Node 20+
-- An OpenAI-compatible chat API key
-- Optional embedding API key for semantic retrieval
+## Why LibreTutor
 
-## Setup
+Most AI learning tools stop at chat over documents. LibreTutor turns a source file into a study loop:
 
-### 1. Postgres + pgvector
+| Step | What happens |
+| --- | --- |
+| Upload | Add a PDF, EPUB, or Markdown source. |
+| Structure | LibreTutor extracts or infers chapters, sections, and lessons. |
+| Dialogue | A configurable AI tutor teaches through focused conversation. |
+| Assessment | The current conversation is checked against the lesson goals. |
+| Practice | Exercises are generated from what you covered and what you missed. |
+| Reflection | The tutor writes a journal entry for the completed attempt. |
+
+## Features
+
+- **Private by default**: self-host it on your own server and use your own model keys.
+- **Book-shaped learning**: keeps the original chapter and section structure instead of flattening a book into loose chunks.
+- **Persona-aware tutor**: define the tutor's voice, relationship, and teaching style per course.
+- **Streaming dialogue**: server-sent events keep long tutor replies responsive.
+- **Retrieval grounded in the source**: pgvector-backed semantic search brings relevant passages into each lesson.
+- **Assessment before practice**: exercises are tailored after LibreTutor has read the learning conversation.
+- **Attempt-aware progress**: retries keep their own dialogue, exercises, grading, and journal entry.
+- **One-container app image**: the production image serves both the React app and FastAPI API.
+
+## Quick Start
+
+For a public or semi-private server, use the Docker Compose stack:
+
+```bash
+git clone git@github.com:Deriicc/LibreTutor.git
+cd LibreTutor
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```dotenv
+DOMAIN=learn.example.com
+POSTGRES_PASSWORD=replace-with-a-strong-password
+ENCRYPTION_KEY=replace-with-a-generated-key
+CORS_ORIGINS=["https://learn.example.com"]
+```
+
+Generate an encryption key with:
+
+```bash
+python3 -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+```
+
+Start the stack:
+
+```bash
+docker compose up -d --build
+```
+
+Open:
+
+```text
+https://learn.example.com/
+```
+
+Read the full guide: [DEPLOY.md](DEPLOY.md).
+
+## Local Development
+
+LibreTutor expects PostgreSQL 16 with pgvector, Python 3.11+, and Node 20+.
 
 ```bash
 sudo apt-get update
@@ -37,208 +102,136 @@ sudo -u postgres psql -c "CREATE DATABASE self_learning OWNER app;"
 sudo -u postgres psql -d self_learning -c "CREATE EXTENSION IF NOT EXISTS vector;"
 ```
 
-### 2. Backend
+Create `backend/.env`:
+
+```dotenv
+DATABASE_URL=postgresql+asyncpg://app:app@localhost:5432/self_learning
+CORS_ORIGINS=["http://localhost:5173"]
+PRODUCTION=false
+ENCRYPTION_KEY=
+
+CHAT_BASE_URL=https://api.deepseek.com
+CHAT_API_KEY=
+CHAT_MODEL=deepseek-chat
+CHAT_PROVIDER=openai
+
+EMBEDDING_API_KEY=
+EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDING_MODEL=text-embedding-v4
+```
+
+Install dependencies and migrate:
 
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-Create `backend/.env`:
-
-```env
-DATABASE_URL=postgresql+asyncpg://app:app@localhost:5432/self_learning
-CORS_ORIGINS=["http://localhost:5173"]
-
-# Dev default: false. In production this hides docs and requires ENCRYPTION_KEY.
-PRODUCTION=false
-ENCRYPTION_KEY=
-
-# Optional app-level defaults. You normally set these on the in-app Settings
-# page instead; filling them here just pre-seeds the defaults.
-CHAT_API_KEY=
-CHAT_BASE_URL=https://api.deepseek.com
-CHAT_MODEL=deepseek-chat
-CHAT_PROVIDER=openai
-
-# Optional embedding defaults. Missing embedding config falls back to local
-# deterministic hash embeddings.
-EMBEDDING_API_KEY=
-EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-EMBEDDING_MODEL=text-embedding-v4
-```
-
-Run migrations:
-
-```bash
-cd backend
-source .venv/bin/activate
 alembic upgrade head
-```
 
-### 3. Frontend
-
-```bash
-cd frontend
+cd ../frontend
 npm install
 ```
 
-## Dev Server
+Run the local app:
 
 ```bash
-./start.sh          # start Postgres + backend + frontend
-./start.sh stop     # stop backend + frontend
-./start.sh logs     # tail logs
-./start.sh status   # show processes and endpoint status
+./start.sh
 ```
 
-Endpoints:
-
-- Backend: `http://localhost:8000`
-- App: `http://localhost:5173`
-- Health: `curl http://localhost:8000/api/health`
-
-## Configuring your API key
-
-Open the app and go to **设置 (Settings)**. Enter your OpenAI-compatible chat
-key/model (and optionally an embedding key) and save. The keys are stored in a
-single `AppSettings` row, encrypted at rest when `ENCRYPTION_KEY` is set.
-
-## Directory Structure
+Local endpoints:
 
 ```text
-.
-├── backend/
-│   ├── app/
-│   │   ├── chat/           SSE chat routes + Socratic prompt assembly
-│   │   ├── courses/        Upload, tree builder, embedding/RAG, diary inputs
-│   │   ├── kp/             Material, assessment, exercise, grading, diary flow
-│   │   ├── models/         SQLAlchemy ORM models
-│   │   ├── prompts/        Prompt files
-│   │   ├── settings_router.py
-│   │   ├── user_llm.py
-│   │   └── crypto.py       EncryptedJSONB for the API settings blob
-│   ├── alembic/            Migrations
-│   └── tests/
-├── frontend/
-│   └── src/                App
-├── docs/adr/               Architecture decisions
-└── start.sh
+App:     http://localhost:5173
+API:     http://localhost:8000
+Health:  http://localhost:8000/api/health
 ```
+
+## Model Configuration
+
+LibreTutor uses OpenAI-compatible chat settings by default and also supports Anthropic-compatible chat settings from the in-app Settings page.
+
+Embeddings are optional. If you do not configure an embedding model, LibreTutor falls back to deterministic local hash embeddings so the app can still run; semantic retrieval quality improves when you provide a real embedding model.
 
 ## Architecture
 
-### Domain Model
-
 ```text
-Course -> Chapter -> Section -> KnowledgePoint
+Source file
+  -> Course map
+  -> Lessons
+  -> Tutor dialogue
+  -> Assessment
+  -> Exercises
+  -> Grading
+  -> Tutor journal
 ```
 
-`KnowledgePoint` is the learning unit. It owns status (`untouched` / `in_progress` / `passed`) and participates in the full learning loop.
+| Layer | Stack |
+| --- | --- |
+| Frontend | React 18, TypeScript, Vite |
+| Backend | FastAPI, async SQLAlchemy, Alembic |
+| Database | PostgreSQL 16, pgvector |
+| Parsing | PyMuPDF for PDF and EPUB, Markdown virtual pages |
+| LLM | User-configured chat and embedding providers |
+| Production | Docker Compose, Caddy, one app image |
 
-Two synthetic read-only KPs are injected around the body tree:
+Code map:
 
-- `全书导读` (`boundary.kind = "overview"`)
-- `全书总结` (`boundary.kind = "summary"`)
+```text
+backend/app/
+  chat/        tutor dialogue and prompt assembly
+  courses/     upload, course map building, retrieval, reports
+  kp/          lesson material, assessment, exercises, grading, journal
+  models/      SQLAlchemy models
+  prompts/     tutor, assessment, exercise, and journal prompts
 
-They can be discussed with the teacher, but they cannot be assessed, exercised, submitted, advanced, or passed. They are excluded from course progress and chapter/section rollup.
+frontend/src/
+  routes/      app pages
+  components/  shared UI
+  api/         browser API clients
+```
 
-### Attempts
+## Security Model
 
-Retry is modeled as `KnowledgePoint.current_attempt`.
+LibreTutor is intentionally single-user and has no built-in login screen. Anyone who can reach the app can use the configured model keys and read the stored courses.
 
-Attempt-scoped records:
+For internet-facing deployments, put LibreTutor behind at least one of:
 
-- `Message(kp_id, attempt)`
-- `KPAssessment(kp_id, attempt)`
-- `KPExerciseSet(kp_id, attempt)`
-- `Submission.attempt`
-- `TeacherDiaryEntry(kp_id, attempt)`
+- a firewall or cloud security group limited to your IPs
+- a VPN or private network
+- Caddy `basic_auth`
+- an OAuth proxy
+- mTLS
 
-Chat routes capture `current_attempt` once when the user sends or opens a dialogue. The assistant reply is written later after SSE streaming completes, but it keeps the captured attempt so a concurrent retry cannot split one turn across attempts.
+Production mode requires `ENCRYPTION_KEY` and encrypts the model settings stored in the database.
 
-### Material vs Exercise Set
-
-`KPMaterial` is stable per KP:
-
-- `layer3_prompt`
-- `keyphrases`
-- `knowledge_checklist`
-
-It is generated from the textbook and reused across attempts.
-
-`KPExerciseSet` is per attempt. It is generated after `KPAssessment`, using:
-
-- material checklist + keyphrases
-- assessment `covered` + `partial` concepts
-- assessment suggested `difficulty` + `count`
-
-Weakness review injection was removed. Weakness rows are still recorded for diary/context, but they do not feed later exercise generation.
-
-### Prompt Stack
-
-Every chat turn builds one system prompt:
-
-| Layer | Content | Source |
-|-------|---------|--------|
-| Layer 1 | Socratic teaching rules | `prompts/socratic_layer1.md` |
-| Layer 2 | Live Persona: scene, learner context, few-shots | current `TeacherConfig` |
-| Layer 3 | KP position, keyphrases, checklist, RAG chunks | `KPMaterial` + retrieval |
-
-Persona is live, not frozen. Editing `TeacherConfig` affects the next dialogue turn and the next diary entry. Old messages and old diary pages are not rewritten.
-
-### Retrieval
-
-At course build, the source file is chunked and indexed into `document_chunks`.
-
-At chat time:
-
-- KP with a page range -> fetch chunks overlapping that range in reading order.
-- KP without a page range -> semantic top-k search with a query anchored by KP title, keyphrases, and the user message.
-
-Synthetic overview/summary KPs have no page range, so they use whole-book semantic retrieval.
-
-### Learning Lifecycle
-
-1. You upload PDF or Markdown.
-2. Builder creates the fixed 4-level tree, partitions front/back matter, injects overview/summary KPs, indexes chunks, and prewarms `KPMaterial`.
-3. You open a KP. Chat shows only the current attempt's messages. The frontend buffers SSE deltas and flushes at most once per animation frame.
-4. You request assessment. `KPAssessment` evaluates the current attempt's chat history against `KPMaterial.knowledge_checklist`.
-5. You open exercises. `POST /exercise-set` generates or returns the current attempt's `KPExerciseSet`; `GET /content` is read-only for the current cached set.
-6. You submit answers. Grading runs async; MCQ is deterministically scored, short answers are LLM-scored, and the overall score is weighted.
-7. `advance(next)` marks the KP passed. `advance(retry)` bumps `current_attempt`. Either action writes a `TeacherDiaryEntry` for the attempt that just ended if that attempt had chat or a submission.
-
-### Teacher Diary
-
-`TeacherDiaryEntry` replaced the old learning report page. It is a first-person, Persona-authored diary page for one `(kp_id, attempt)`. Structured facts such as progress, grades, weaknesses, and assessment output are inputs to the diarist LLM; the UI presents diary prose, not a dashboard.
-
-`courses.report._compute_progress` feeds the diary. It excludes synthetic KPs from completion counts and groups study time by `(kp_id, attempt)` so a long gap between retry rounds is not counted as study time. Synthetic-KP chat time still counts as study time by product definition.
-
-## Production
-
-Read [DEPLOY.md](DEPLOY.md) before a public deploy, or [DEPLOY.server.md](DEPLOY.server.md) for the self-hosted Docker Compose + Caddy stack.
-
-Production hardening:
-
-- `PRODUCTION=true` hides `/docs`, `/redoc`, and `/openapi.json`.
-- Wildcard CORS is rejected in production.
-- The API settings blob is encrypted at rest with Fernet `ENCRYPTION_KEY`.
-
-> This edition has **no authentication** — anyone who can reach the app's port can use it. Control reachability at the network layer (firewall, a reverse proxy with auth, or a private network) when self-hosting on the public internet.
-
-## Running Tests
+## Commands
 
 ```bash
+# local development
+./start.sh
+./start.sh stop
+./start.sh logs
+./start.sh status
+
+# production
+docker compose up -d --build
+docker compose logs -f app
+docker compose ps
+
+# backend tests
 cd backend
 source .venv/bin/activate
-alembic upgrade head
 pytest
 ```
 
-Tests use real Postgres + pgvector. LLM call sites are monkeypatched.
+## Documentation
+
+- [English deployment guide](DEPLOY.md)
+- [中文部署指南](DEPLOY.zh-CN.md)
+- [Architecture decisions](docs/adr)
+- [Project context](CONTEXT.md)
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT License. See [LICENSE](LICENSE).

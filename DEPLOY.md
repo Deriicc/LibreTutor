@@ -1,81 +1,279 @@
-# Production Deployment & Security Checklist
+# LibreTutor Deployment
 
-This is the **single-user, self-hosted** edition: there is no login, no
-accounts, and no admin panel. The app is unauthenticated, so the most
-important deploy decision is **who can reach it** (see §5). For the
-turnkey Docker Compose + Caddy path, see [DEPLOY.server.md](DEPLOY.server.md);
-this file is the generic manual checklist.
+<p align="center">
+  <strong>Run LibreTutor on your own server with Docker Compose, PostgreSQL, and Caddy.</strong>
+</p>
 
-## 1. Secrets (do this first — manual)
+<p align="center">
+  <a href="README.md">README</a>
+  ·
+  <a href="DEPLOY.zh-CN.md">中文部署指南</a>
+</p>
 
-- [ ] **Rotate the dev LLM keys.** A development `backend/.env` may have
-      contained live `CHAT_API_KEY` / `EMBEDDING_API_KEY`. Revoke them in
-      the provider console and issue new ones.
-- [ ] Production keys (if any) live only in the server's `.env`, created
-      from `backend/.env.production.example`. Never commit a filled
-      `.env`; never bake it into a container image or build context.
-- [ ] Dedicated Postgres role with a strong password — not `app:app`.
+This guide describes the recommended self-hosted production setup. It runs three services:
 
-## 2. Environment
+| Service | Purpose |
+| --- | --- |
+| `caddy` | Public HTTPS entrypoint, automatic TLS, reverse proxy |
+| `app` | FastAPI API plus the built React frontend |
+| `db` | PostgreSQL 16 with pgvector |
 
-- [ ] `PRODUCTION=true` — hides `/docs`, `/redoc`, `/openapi.json` and
-      makes `ENCRYPTION_KEY` mandatory.
-- [ ] `CORS_ORIGINS` set to the exact HTTPS frontend origin(s) as a JSON
-      list. A `"*"` origin makes the app refuse to boot under
-      `PRODUCTION=true`.
-- [ ] `DATABASE_URL` points at the production database.
-- [ ] `ENCRYPTION_KEY` set to a generated Fernet key (encrypts the API
-      keys you enter on the Settings page at rest). The app refuses to
-      boot under `PRODUCTION=true` without it. Keep it stable and backed
-      up — rotating it makes already-encrypted `api_settings` unreadable.
-      Generate: `python -c "from cryptography.fernet import Fernet;
-      print(Fernet.generate_key().decode())"`
+The public origin is a single domain:
 
-## 3. TLS & reverse proxy
+```text
+https://learn.example.com/           -> LibreTutor app
+https://learn.example.com/api/health -> API health check
+```
 
-Terminate TLS at a reverse proxy (nginx / Caddy); never expose uvicorn
-directly.
+## Requirements
 
-- [ ] Valid certificate; HTTP → HTTPS redirect.
-- [ ] `Strict-Transport-Security` (HSTS) header.
-- [ ] Security headers: `X-Content-Type-Options: nosniff`,
-      `X-Frame-Options: DENY` (or a frame-ancestors CSP),
-      a baseline `Content-Security-Policy`.
-- [ ] Proxy forwards `X-Forwarded-For`. Run uvicorn with
-      `--proxy-headers --forwarded-allow-ips="<proxy ip>"` so logs show
-      the real client IP, not the proxy.
-- [ ] Proxy-level request size / connection limits as defence in depth
-      for the upload endpoints.
+- A Linux server with a public IP address
+- A domain name pointing to that server
+- Ports `80` and `443` open in both the cloud security group and host firewall
+- Docker Engine and Docker Compose plugin
+- An OpenAI-compatible or Anthropic-compatible chat API key
+- Optional embedding API key for stronger semantic retrieval
 
-## 4. App server
+LibreTutor has no built-in login. If your domain is reachable from the internet, protect it with a firewall, VPN, Caddy `basic_auth`, an OAuth proxy, or mTLS.
 
-- [ ] Run without `--reload`; use multiple workers, e.g.
-      `uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
-      --proxy-headers`.
-      Bind to `127.0.0.1` (proxy reaches it locally), not `0.0.0.0`.
-- [ ] `pip install -r backend/requirements.txt`; run `alembic upgrade
-      head` before starting.
-- [ ] Build and serve the frontend: `frontend/` proxies `/api` to the
-      backend origin.
+## 1. Install Docker
 
-## 5. Access control (no built-in auth)
+On Debian or Ubuntu:
 
-This edition has **no authentication**. Anyone who can open the app can
-read every course and use your configured API keys. Restrict reachability:
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
 
-- [ ] Don't expose it nakedly on the public internet. Put it behind one
-      of: a firewall / security group limited to your IPs, a VPN or
-      private network, or a reverse proxy that adds auth (e.g. Caddy
-      `basic_auth`, an OAuth proxy, or mTLS).
-- [ ] Treat the configured LLM keys as spendable: whoever reaches the app
-      can run up usage on them.
+Verify:
 
-## 6. Verify after deploy
+```bash
+docker --version
+docker compose version
+```
 
-- [ ] `https://<domain>/docs` → 404 (docs disabled).
-- [ ] `https://<domain>/api/health` → `{"status":"ok"}`.
-- [ ] Opening `/` loads the app directly with no login redirect.
-- [ ] `/admin` → 404 (no admin panel in this edition).
-- [ ] A cross-origin browser request from an origin not in
-      `CORS_ORIGINS` is blocked.
-- [ ] The Settings page saves a key and `测试 (test)` succeeds.
+Optional non-root Docker access:
+
+```bash
+sudo usermod -aG docker $USER
+```
+
+Log out and back in after changing the group.
+
+## 2. Clone LibreTutor
+
+```bash
+git clone git@github.com:Deriicc/LibreTutor.git
+cd LibreTutor
+```
+
+Use your own fork URL if you deploy from a fork.
+
+## 3. Configure the Environment
+
+```bash
+cp .env.example .env
+```
+
+Generate an encryption key:
+
+```bash
+python3 -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+```
+
+Edit `.env`:
+
+```dotenv
+DOMAIN=learn.example.com
+POSTGRES_USER=app
+POSTGRES_PASSWORD=replace-with-a-strong-url-safe-password
+POSTGRES_DB=self_learning
+ENCRYPTION_KEY=replace-with-the-generated-key
+CORS_ORIGINS=["https://learn.example.com"]
+```
+
+Optional model defaults:
+
+```dotenv
+CHAT_BASE_URL=https://api.deepseek.com
+CHAT_API_KEY=
+CHAT_MODEL=deepseek-chat
+CHAT_PROVIDER=openai
+
+EMBEDDING_API_KEY=
+EMBEDDING_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBEDDING_MODEL=text-embedding-v4
+```
+
+You can leave model keys blank and enter them later in the LibreTutor Settings page.
+
+## 4. Start the Stack
+
+```bash
+docker compose up -d --build
+```
+
+Watch the app logs:
+
+```bash
+docker compose logs -f app
+```
+
+The app container runs database migrations automatically before starting the server.
+
+## 5. Verify
+
+Open:
+
+```text
+https://learn.example.com/
+```
+
+Check:
+
+```bash
+curl https://learn.example.com/api/health
+```
+
+Expected response:
+
+```json
+{"status":"ok"}
+```
+
+Production API docs should be hidden:
+
+```text
+https://learn.example.com/docs -> 404
+```
+
+## 6. Configure Model Keys
+
+Open the app, go to Settings, and fill in:
+
+- chat provider
+- base URL
+- API key
+- model name
+- optional embedding provider settings
+
+With `ENCRYPTION_KEY` set, these settings are encrypted at rest in PostgreSQL.
+
+## Access Control
+
+LibreTutor is a private single-user workspace. Do not publish it without an access boundary.
+
+Recommended options:
+
+| Option | Best for |
+| --- | --- |
+| Cloud firewall / security group | Personal server with fixed IP access |
+| VPN or private network | Home lab or private team |
+| Caddy `basic_auth` | Simple password gate |
+| OAuth proxy | Shared deployments |
+| mTLS | Strict private infrastructure |
+
+The `app` service is not published to the host. Only Caddy can reach it inside the Compose network.
+
+## Maintenance
+
+Update:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+View status:
+
+```bash
+docker compose ps
+docker compose logs -f app
+docker compose logs -f caddy
+```
+
+Restart:
+
+```bash
+docker compose restart app
+```
+
+Stop:
+
+```bash
+docker compose stop
+```
+
+## Backups
+
+Back up PostgreSQL:
+
+```bash
+docker compose exec -T db pg_dump -U app self_learning > libretutor.sql
+```
+
+Back up uploaded source files:
+
+```bash
+docker compose exec -T app tar czf - -C /data uploads > uploads.tgz
+```
+
+Restore PostgreSQL into an empty database:
+
+```bash
+cat libretutor.sql | docker compose exec -T db psql -U app self_learning
+```
+
+## Troubleshooting
+
+### Caddy cannot issue a certificate
+
+- Confirm the domain has an A or AAAA record pointing to the server.
+- Confirm ports `80` and `443` are open.
+- Check Caddy logs:
+
+```bash
+docker compose logs caddy
+```
+
+### The app container keeps restarting
+
+Check logs:
+
+```bash
+docker compose logs app
+```
+
+Common causes:
+
+- invalid `CORS_ORIGINS` JSON
+- missing `ENCRYPTION_KEY`
+- weak or malformed database settings
+- database health check not passing
+
+### Chat says model settings are missing
+
+Set chat settings in the app's Settings page, or prefill `CHAT_API_KEY`, `CHAT_BASE_URL`, `CHAT_MODEL`, and `CHAT_PROVIDER` in `.env`.
+
+### Uploads fail
+
+The default upload limit is 50 MB. Confirm the file is one of:
+
+```text
+.pdf
+.epub
+.md
+.markdown
+```
+
+## Platform Deployments
+
+`railway.toml` is included for Dockerfile-based Railway deploys. On platforms that already provide HTTPS and reverse proxying, Caddy is not required. You still need PostgreSQL with pgvector, `PRODUCTION=true`, `ENCRYPTION_KEY`, and exact `CORS_ORIGINS`.

@@ -18,12 +18,12 @@ from sqlalchemy.orm import selectinload
 from app.chat.persona_generator import compute_scene_signature, generate_few_shots
 from app.chat.socratic import (
     DIALOGUE_TEMPERATURE,
-    LAYER1_PROMPT,
     assemble_system_prompt,
 )
 from app.config import settings
 from app.courses.builder import build_chapter_tree
-from app.courses.teacher_persona import DEFAULT_SCENE, render_persona
+from app.courses.teacher_persona import default_scene, render_persona
+from app.lang import lang_of
 from app.courses.schemas import (
     ChapterTreeOut,
     CourseOut,
@@ -211,10 +211,10 @@ async def list_courses(
     return result
 
 
-def _config_to_out(config: TeacherConfig | None) -> TeacherConfigOut:
+def _config_to_out(config: TeacherConfig | None, lang: str = "zh") -> TeacherConfigOut:
     if config is None:
         return TeacherConfigOut(
-            scene=DEFAULT_SCENE,
+            scene=default_scene(lang),
             learner_context="",
             has_generated_few_shots=False,
             scene_dirty=True,
@@ -251,7 +251,8 @@ async def get_teacher_config(
 ) -> TeacherConfigOut:
     await _load_course(course_id, db)
     config = await db.get(TeacherConfig, course_id)
-    return _config_to_out(config)
+    lang = lang_of(await load_api_settings(db))
+    return _config_to_out(config, lang)
 
 
 @router.put("/{course_id}/teacher-config", response_model=TeacherConfigOut)
@@ -384,12 +385,21 @@ class TestChatIn(BaseModel):
     messages: list[TestChatMessageIn]
 
 
-TEST_CHAT_LAYER3 = (
-    "当前学习上下文：\n"
-    "- 测试场景：暂无具体知识点，请按场景人设和学生自由对谈。\n"
-    "- 必要时可引入「勾股定理」作为示例话题。\n"
-    "- 这是一段试聊，旨在让用户感受 AI 教师的风格。"
-)
+TEST_CHAT_LAYER3 = {
+    "zh": (
+        "当前学习上下文：\n"
+        "- 测试场景：暂无具体知识点，请按场景人设和学生自由对谈。\n"
+        "- 必要时可引入「勾股定理」作为示例话题。\n"
+        "- 这是一段试聊，旨在让用户感受 AI 教师的风格。"
+    ),
+    "en": (
+        "Current learning context:\n"
+        "- Test scene: no specific knowledge point; chat freely with the student "
+        "in the scene persona.\n"
+        "- You may bring in the Pythagorean theorem as an example topic if needed.\n"
+        "- This is a trial chat to let the user feel the AI teacher's style."
+    ),
+}
 
 
 def _sse_bytes(data: str, event: str | None = None) -> bytes:
@@ -411,17 +421,19 @@ async def test_chat(
             detail="请先保存教学场景再来试聊",
         )
 
+    api_settings = await load_api_settings(db)
+    lang = lang_of(api_settings)
     layer2 = render_persona(
-        config.scene, config.learner_context, config.generated_few_shots
+        config.scene, config.learner_context, config.generated_few_shots, lang
     )
-    system_content = assemble_system_prompt(layer2, TEST_CHAT_LAYER3, turn_count=0)
+    system_content = assemble_system_prompt(
+        layer2, TEST_CHAT_LAYER3[lang], turn_count=0, lang=lang
+    )
 
     llm_messages: list[dict[str, str]] = [
         {"role": "system", "content": system_content}
     ]
     llm_messages.extend({"role": m.role, "content": m.content} for m in payload.messages)
-
-    api_settings = await load_api_settings(db)
 
     async def gen() -> AsyncIterator[bytes]:
         try:

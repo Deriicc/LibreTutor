@@ -11,7 +11,7 @@ from app.chat import socratic
 
 
 def test_layer1_contains_four_stages():
-    text = socratic.LAYER1_PROMPT
+    text = socratic.LAYER1_PROMPTS["zh"]
     assert "阶段 1：诊断" in text
     assert "阶段 2：引导" in text
     assert "阶段 3：锚定" in text
@@ -22,7 +22,7 @@ def test_layer1_anchoring_stage_specifies_definition_formula_example():
     """The anchoring stage is the only place the LLM is permitted to
     expand beyond 1-3 sentences. The prompt must explicitly call out the
     three components or it'll regress to "endless questioning"."""
-    text = socratic.LAYER1_PROMPT
+    text = socratic.LAYER1_PROMPTS["zh"]
     # Anchoring section must mention the three required components.
     assert "核心定义" in text
     assert "公式" in text
@@ -34,7 +34,7 @@ def test_layer1_anchoring_stage_specifies_definition_formula_example():
 def test_layer1_specifies_anchoring_triggers():
     """If the LLM doesn't know WHEN to anchor, it'll never anchor.
     The triggers (接近正确 / 连续两次答错 / 5 轮以上) must be in the prompt."""
-    text = socratic.LAYER1_PROMPT
+    text = socratic.LAYER1_PROMPTS["zh"]
     assert "接近正确" in text
     assert "连续两次答错" in text or "连续两次" in text
     assert "5 轮" in text
@@ -43,7 +43,7 @@ def test_layer1_specifies_anchoring_triggers():
 def test_layer1_self_check_mechanism_present():
     """The 'every 5 rounds self-check' is the safety net that prevents
     the model from drifting back into infinite questioning."""
-    text = socratic.LAYER1_PROMPT
+    text = socratic.LAYER1_PROMPTS["zh"]
     assert "自查" in text
     assert "5 轮" in text
 
@@ -51,7 +51,7 @@ def test_layer1_self_check_mechanism_present():
 def test_layer1_references_knowledge_checklist():
     """Layer 3 will inject a knowledge_checklist; Layer 1 must reference
     it so the model knows starred concepts must be anchored."""
-    text = socratic.LAYER1_PROMPT
+    text = socratic.LAYER1_PROMPTS["zh"]
     assert "knowledge_checklist" in text or "知识清单" in text
     assert "★" in text  # the star marker for must-anchor concepts
 
@@ -59,7 +59,7 @@ def test_layer1_references_knowledge_checklist():
 def test_layer1_preserves_red_lines():
     """The cross-stage red lines (textbook grounding, LaTeX, resistance
     handling) must survive the four-stage refactor."""
-    text = socratic.LAYER1_PROMPT
+    text = socratic.LAYER1_PROMPTS["zh"]
     # Resistance handling: pivot approach, not a rigid 3-option menu.
     assert "换个方向" in text or "抗拒" in text
     # LaTeX requirement.
@@ -116,7 +116,7 @@ def test_persona_few_shot_generation_prompt_requires_anchoring_case():
 def test_layer1_stage_specific_reply_lengths():
     """Different stages get different reply-length budgets. The table
     must enumerate them so the LLM doesn't squeeze anchoring into short replies."""
-    text = socratic.LAYER1_PROMPT
+    text = socratic.LAYER1_PROMPTS["zh"]
     # Anchoring must have a significantly larger budget than other stages.
     assert "4-8 句" in text  # 锚定（成人版扩展）
     # Guidance and transfer have distinct budgets.

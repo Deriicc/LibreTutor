@@ -29,6 +29,7 @@ from app.config import settings
 from app.courses.report import _compute_progress
 from app.courses.teacher_persona import render_persona_for_course
 from app.db import SessionLocal
+from app.lang import lang_of
 from app.llm import complete_json
 from app.models import (
     Grade,
@@ -45,8 +46,30 @@ from app.user_llm import load_api_settings
 
 logger = logging.getLogger(__name__)
 
-_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "teacher_diary.md"
-DIARY_SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
+_PROMPT_DIR = Path(__file__).parent.parent / "prompts"
+DIARY_SYSTEM_PROMPTS = {
+    "zh": (_PROMPT_DIR / "teacher_diary.md").read_text(encoding="utf-8"),
+    "en": (_PROMPT_DIR / "teacher_diary.en.md").read_text(encoding="utf-8"),
+}
+
+_DIARY_SECTIONS = {
+    "zh": {
+        "role": "你的角色",
+        "facts": "这节课的真实材料",
+        "history": "这节课你和学生的完整对话",
+        "no_history": "（没有对话记录）",
+        "prior": "你过往的日记（全文，按时间）",
+        "closing": "现在，写下今天这一篇。严格按要求输出 JSON。",
+    },
+    "en": {
+        "role": "Your role",
+        "facts": "This lesson's real material",
+        "history": "Your full dialogue with the student this lesson",
+        "no_history": "(no dialogue record)",
+        "prior": "Your past diary entries (full text, chronological)",
+        "closing": "Now, write today's entry. Output JSON strictly as required.",
+    },
+}
 
 
 # ---------- LLM IO schema ----------
@@ -166,13 +189,15 @@ def build_diary_messages(
     facts_block: str,
     history_block: str,
     prior_diary_block: str,
+    lang: str = "zh",
 ) -> list[dict[str, str]]:
-    system = f"{DIARY_SYSTEM_PROMPT}\n\n# 你的角色\n\n{persona_block}"
+    s = _DIARY_SECTIONS[lang]
+    system = f"{DIARY_SYSTEM_PROMPTS[lang]}\n\n# {s['role']}\n\n{persona_block}"
     user = (
-        f"# 这节课的真实材料\n\n{facts_block}\n\n"
-        f"# 这节课你和学生的完整对话\n\n{history_block or '（没有对话记录）'}\n\n"
-        f"# 你过往的日记（全文，按时间）\n\n{prior_diary_block}\n\n"
-        f"现在，写下今天这一篇。严格按要求输出 JSON。"
+        f"# {s['facts']}\n\n{facts_block}\n\n"
+        f"# {s['history']}\n\n{history_block or s['no_history']}\n\n"
+        f"# {s['prior']}\n\n{prior_diary_block}\n\n"
+        f"{s['closing']}"
     )
     return [
         {"role": "system", "content": system},
@@ -195,7 +220,11 @@ def parse_diary_payload(raw: str) -> _DiaryPayload:
 
 
 async def _gather_inputs(
-    kp_id: uuid.UUID, attempt: int, course_id: uuid.UUID, db: AsyncSession
+    kp_id: uuid.UUID,
+    attempt: int,
+    course_id: uuid.UUID,
+    db: AsyncSession,
+    lang: str = "zh",
 ) -> dict[str, Any]:
     kp = await db.get(KnowledgePoint, kp_id)
     kp_title = kp.title if kp is not None else "（未知知识点）"
@@ -243,7 +272,7 @@ async def _gather_inputs(
 
     progress = await _compute_progress(course_id, db)
 
-    persona = await render_persona_for_course(course_id, db)
+    persona = await render_persona_for_course(course_id, db, lang)
 
     return {
         "kp_title": kp_title,
@@ -310,7 +339,9 @@ async def generate_diary_entry(
         )
 
         try:
-            inputs = await _gather_inputs(kp_id, attempt, course_id, db)
+            api_settings = await load_api_settings(db)
+            lang = lang_of(api_settings)
+            inputs = await _gather_inputs(kp_id, attempt, course_id, db, lang)
             messages = build_diary_messages(
                 persona_block=inputs["persona"],
                 facts_block=render_facts_block(
@@ -328,8 +359,8 @@ async def generate_diary_entry(
                     inputs["prior"],
                     char_budget=settings.diary_context_char_budget,
                 ),
+                lang=lang,
             )
-            api_settings = await load_api_settings(db)
             raw = await complete_json(api_settings, messages)
             payload = parse_diary_payload(raw)
 

@@ -33,7 +33,7 @@ def test_count_turns_on_empty_history():
 
 
 def test_layer1_prompt_loads_rules_only():
-    text = socratic.LAYER1_PROMPT
+    text = socratic.LAYER1_PROMPTS["zh"]
     assert "苏格拉底" in text
     # Layer 1 is now persona-agnostic — no hard-coded few-shots there.
     assert "三月七" not in text
@@ -45,7 +45,7 @@ def test_layer1_prompt_loads_rules_only():
 
 
 def test_default_scene_loads_and_describes_persona():
-    assert "费曼" in teacher_persona.DEFAULT_SCENE
+    assert "费曼" in teacher_persona.default_scene()
 
 
 def test_render_persona_with_all_three_parts():

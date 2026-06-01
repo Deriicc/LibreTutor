@@ -14,12 +14,17 @@ import json
 import logging
 from pathlib import Path
 
+from app.lang import lang_of
 from app.llm import complete_json
 
 logger = logging.getLogger(__name__)
 
-_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "persona_few_shot_generation.md"
-FEW_SHOT_SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
+_PROMPT_DIR = Path(__file__).parent.parent / "prompts"
+FEW_SHOT_SYSTEM_PROMPTS = {
+    "zh": (_PROMPT_DIR / "persona_few_shot_generation.md").read_text(encoding="utf-8"),
+    "en": (_PROMPT_DIR / "persona_few_shot_generation.en.md").read_text(encoding="utf-8"),
+}
+_SCENE_LABEL = {"zh": "教师场景", "en": "Teacher scene"}
 
 
 def compute_scene_signature(scene: str) -> str:
@@ -39,9 +44,10 @@ async def generate_few_shots(
     if not scene_stripped:
         return ""
 
+    lang = lang_of(api_settings)
     messages = [
-        {"role": "system", "content": FEW_SHOT_SYSTEM_PROMPT},
-        {"role": "user", "content": f"教师场景：\n\n{scene_stripped}"},
+        {"role": "system", "content": FEW_SHOT_SYSTEM_PROMPTS[lang]},
+        {"role": "user", "content": f"{_SCENE_LABEL[lang]}：\n\n{scene_stripped}"},
     ]
     try:
         raw = await complete_json(api_settings, messages)

@@ -30,6 +30,7 @@ from app.kp.exercise_validators import (
     validate_topic_whitelist,
 )
 from app.kp.loader import extract_kp_text
+from app.lang import lang_of
 from app.llm import complete_json
 from app.models import (
     KPAssessment,
@@ -41,11 +42,18 @@ logger = logging.getLogger(__name__)
 
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
-KP_MATERIAL_SYSTEM_PROMPT = (_PROMPTS_DIR / "kp_material.md").read_text(encoding="utf-8")
-EXERCISE_SET_SYSTEM_PROMPT = (_PROMPTS_DIR / "exercise_set.md").read_text(encoding="utf-8")
-BOOK_OVERVIEW_SYSTEM_PROMPT = (_PROMPTS_DIR / "book_overview.md").read_text(
-    encoding="utf-8"
-)
+
+
+def _load_pair(stem: str) -> dict[str, str]:
+    return {
+        "zh": (_PROMPTS_DIR / f"{stem}.md").read_text(encoding="utf-8"),
+        "en": (_PROMPTS_DIR / f"{stem}.en.md").read_text(encoding="utf-8"),
+    }
+
+
+KP_MATERIAL_SYSTEM_PROMPTS = _load_pair("kp_material")
+EXERCISE_SET_SYSTEM_PROMPTS = _load_pair("exercise_set")
+BOOK_OVERVIEW_SYSTEM_PROMPTS = _load_pair("book_overview")
 
 
 # ---------- LLM generators ----------
@@ -76,7 +84,7 @@ async def generate_kp_material(
         f"文本内容：\n{text}"
     )
     messages = [
-        {"role": "system", "content": KP_MATERIAL_SYSTEM_PROMPT},
+        {"role": "system", "content": KP_MATERIAL_SYSTEM_PROMPTS[lang_of(api_settings)]},
         {"role": "user", "content": user_msg},
     ]
 
@@ -120,7 +128,7 @@ async def generate_book_overview_material(
         f"辅文原文：\n{matter_text or '（本书无可用序言/结语，请仅依据大纲生成）'}"
     )
     messages = [
-        {"role": "system", "content": BOOK_OVERVIEW_SYSTEM_PROMPT},
+        {"role": "system", "content": BOOK_OVERVIEW_SYSTEM_PROMPTS[lang_of(api_settings)]},
         {"role": "user", "content": user_msg},
     ]
 
@@ -218,7 +226,7 @@ async def generate_exercise_set(
         user_msg = base_user_msg + "\n\n" + "\n\n".join(extras)
 
     messages = [
-        {"role": "system", "content": EXERCISE_SET_SYSTEM_PROMPT},
+        {"role": "system", "content": EXERCISE_SET_SYSTEM_PROMPTS[lang_of(api_settings)]},
         {"role": "user", "content": user_msg},
     ]
 

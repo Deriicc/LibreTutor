@@ -18,15 +18,23 @@ from collections.abc import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.chat.socratic import build_system_prompt, count_turns
+from app.lang import lang_of
 from app.courses.embedding import fetch_page_range_chunks, search_top_k
 from app.kp.loader import get_kp_material
 from app.models import KnowledgePoint, Message
 
 
-OPENING_USER_PROMPT = (
-    "（学生刚进入此知识点，尚未发言。请参照 Few-shot 示例 1 的语气主动开场，"
-    "用一句话邀请学生说说他对此 KP 的已有印象。）"
-)
+OPENING_USER_PROMPTS = {
+    "zh": (
+        "（学生刚进入此知识点，尚未发言。请参照 Few-shot 示例 1 的语气主动开场，"
+        "用一句话邀请学生说说他对此 KP 的已有印象。）"
+    ),
+    "en": (
+        "(The student just entered this knowledge point and hasn't spoken yet. "
+        "Open proactively in the tone of Few-shot example 1, with one sentence "
+        "inviting the student to share their existing impression of this KP.)"
+    ),
+}
 
 
 def _kp_page_range(boundary: dict | None) -> tuple[int | None, int | None]:
@@ -106,7 +114,7 @@ async def assemble_chat_messages(
       query_text: text used to anchor RAG retrieval. Usually the latest
         user message content; pass empty string for the opening turn.
       append_user: when set, appended as a synthetic user-role message
-        after history. Used by the opening flow with `OPENING_USER_PROMPT`.
+        after history. Used by the opening flow with `OPENING_USER_PROMPTS`.
 
     Returns the llm_messages list ready to pass to `stream_chat`.
     """
@@ -121,6 +129,7 @@ async def assemble_chat_messages(
         db,
         turn_count=turn_count,
         retrieval_chunks=retrieval_texts,
+        lang=lang_of(api_settings),
     )
 
     messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]

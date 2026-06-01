@@ -9,7 +9,7 @@ import uuid
 from sqlalchemy import delete
 
 from app.chat.turn import (
-    OPENING_USER_PROMPT,
+    OPENING_USER_PROMPTS,
     _build_retrieval_query,
     _kp_page_range,
     assemble_chat_messages,
@@ -195,12 +195,12 @@ async def test_assemble_opening_flow_appends_opening_user_prompt():
                 kp=kp,
                 history=[],
                 query_text="",
-                append_user=OPENING_USER_PROMPT,
+                append_user=OPENING_USER_PROMPTS["zh"],
             )
 
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
-        assert messages[1] == {"role": "user", "content": OPENING_USER_PROMPT}
+        assert messages[1] == {"role": "user", "content": OPENING_USER_PROMPTS["zh"]}
     finally:
         await _cleanup(course_id)
 

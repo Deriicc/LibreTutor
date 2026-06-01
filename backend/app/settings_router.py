@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
+from app.lang import DEFAULT_LANGUAGE, LANGUAGES
 from app.models import AppSettings
 from app.user_llm import (
     LLMNotConfigured,
@@ -29,6 +30,7 @@ _KEYS = (
     "embedding_api_key",
     "embedding_base_url",
     "embedding_model",
+    "language",
 )
 
 
@@ -40,6 +42,8 @@ class SettingsIn(BaseModel):
     embedding_api_key: str = Field(default="", max_length=512)
     embedding_base_url: str = Field(default="", max_length=512)
     embedding_model: str = Field(default="", max_length=128)
+    # UI + LLM-output language: "zh" | "en".
+    language: str = Field(default=DEFAULT_LANGUAGE, max_length=8)
 
 
 class SettingsOut(SettingsIn):
@@ -51,6 +55,8 @@ def _to_out(raw: dict | None) -> SettingsOut:
     data = {k: str(raw.get(k, "")) for k in _KEYS}
     if not data["chat_provider"]:
         data["chat_provider"] = "openai"
+    if data["language"] not in LANGUAGES:
+        data["language"] = DEFAULT_LANGUAGE
     # Keys are returned in full so the user can verify/edit them — this
     # is a single-tenant self-host product; the value never leaves the
     # owner's own session.
@@ -77,6 +83,8 @@ async def put_settings(
             detail="chat_provider 只能是 openai 或 anthropic",
         )
     data["chat_provider"] = provider or "openai"
+    lang = (data.get("language") or "").strip().lower()
+    data["language"] = lang if lang in LANGUAGES else DEFAULT_LANGUAGE
     # Singleton row (id=1): assigning a fresh dict (not in-place mutation)
     # is detected by the ORM and flushed as an UPDATE.
     row = await db.get(AppSettings, 1)

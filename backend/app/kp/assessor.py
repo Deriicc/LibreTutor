@@ -22,13 +22,17 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.llm import complete_json
+from app.lang import lang_of
 from app.models import KnowledgePoint, KPAssessment, KPMaterial, Message, MessageRole
 
 logger = logging.getLogger(__name__)
 
 
-_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "assessment.md"
-ASSESSMENT_SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
+_PROMPT_DIR = Path(__file__).parent.parent / "prompts"
+ASSESSMENT_SYSTEM_PROMPTS = {
+    "zh": (_PROMPT_DIR / "assessment.md").read_text(encoding="utf-8"),
+    "en": (_PROMPT_DIR / "assessment.en.md").read_text(encoding="utf-8"),
+}
 
 
 # ---------- LLM IO schema ----------
@@ -106,6 +110,7 @@ def build_assessment_messages(
     kp_title: str,
     checklist_block: str,
     history_block: str,
+    lang: str = "zh",
 ) -> list[dict[str, str]]:
     """Pure: assemble the system+user message pair for the assessor LLM."""
     user_content = (
@@ -114,7 +119,7 @@ def build_assessment_messages(
         f"# 对话历史\n\n{history_block}"
     )
     return [
-        {"role": "system", "content": ASSESSMENT_SYSTEM_PROMPT},
+        {"role": "system", "content": ASSESSMENT_SYSTEM_PROMPTS[lang]},
         {"role": "user", "content": user_content},
     ]
 
@@ -177,7 +182,14 @@ def parse_and_validate_payload(
 # ---------- DB I/O ----------
 
 
-def _empty_assessment(attempt: int) -> AssessmentPayload:
+_EMPTY_SUMMARY = {
+    "zh": "对话尚未开始或没有内容可评估，建议先回去和老师讨论后再来作业。",
+    "en": "The dialogue hasn't started or has nothing to assess yet — go discuss "
+    "with the teacher first, then come back to the exercises.",
+}
+
+
+def _empty_assessment(attempt: int, lang: str = "zh") -> AssessmentPayload:
     """Fallback when there's nothing to assess (no chat history / no checklist).
     Surfaces as 0% coverage, easy/2-question default — UI can react sensibly."""
     return AssessmentPayload(
@@ -185,7 +197,7 @@ def _empty_assessment(attempt: int) -> AssessmentPayload:
         partial=[],
         untouched=[],
         coverage_ratio=0.0,
-        mastery_summary="对话尚未开始或没有内容可评估，建议先回去和老师讨论后再来作业。",
+        mastery_summary=_EMPTY_SUMMARY[lang],
         suggested_difficulty="easy",
         suggested_count=2,
     )
@@ -249,6 +261,7 @@ async def run_assessment(
     - Empty checklist or empty history → store the empty fallback (no LLM call)
     - Otherwise → call the assessor LLM, validate, upsert
     """
+    lang = lang_of(api_settings)
     kp = await db.get(KnowledgePoint, kp_id)
     if kp is None:
         raise ValueError(f"KP {kp_id} not found")
@@ -259,7 +272,7 @@ async def run_assessment(
     history = await _load_history(kp_id, attempt, db)
 
     if not checklist or not history:
-        payload = _empty_assessment(attempt)
+        payload = _empty_assessment(attempt, lang)
         return await _upsert_assessment(
             kp_id=kp_id, attempt=attempt, payload=payload, db=db
         )
@@ -269,6 +282,7 @@ async def run_assessment(
         kp_title=kp.title,
         checklist_block=render_checklist_for_assessor(checklist),
         history_block=render_history_block(history),
+        lang=lang,
     )
 
     raw = await complete_json(api_settings, messages)

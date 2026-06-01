@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.db import SessionLocal
 from app.kp.decider import record_grading_weakness_if_low
+from app.lang import lang_of
 from app.llm import complete_json
 from app.user_llm import load_api_settings
 from app.models import (
@@ -35,8 +36,11 @@ from app.models import (
 logger = logging.getLogger(__name__)
 
 
-_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "exercise_grading.md"
-GRADING_SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
+_PROMPT_DIR = Path(__file__).parent.parent / "prompts"
+GRADING_SYSTEM_PROMPTS = {
+    "zh": (_PROMPT_DIR / "exercise_grading.md").read_text(encoding="utf-8"),
+    "en": (_PROMPT_DIR / "exercise_grading.en.md").read_text(encoding="utf-8"),
+}
 
 
 # Per-type weights for the overall_score average. MCQ is deterministic
@@ -120,7 +124,7 @@ async def _call_llm_grade(
 ) -> _GradeSchema:
     user_msg = _build_grading_user_msg(exercises, answers_by_index)
     messages = [
-        {"role": "system", "content": GRADING_SYSTEM_PROMPT},
+        {"role": "system", "content": GRADING_SYSTEM_PROMPTS[lang_of(api_settings)]},
         {"role": "user", "content": user_msg},
     ]
     count = len(exercises)

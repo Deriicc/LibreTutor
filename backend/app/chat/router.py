@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.chat.schemas import MessageOut, SendMessageIn
 from app.chat.socratic import DIALOGUE_TEMPERATURE
-from app.chat.turn import OPENING_USER_PROMPT, assemble_chat_messages
+from app.chat.turn import OPENING_USER_PROMPTS, assemble_chat_messages
+from app.lang import lang_of
 from app.db import SessionLocal, get_session
 from app.llm import stream_chat
 from app.models import (
@@ -235,7 +236,7 @@ async def open_dialogue(
         history=[],
         query_text="",
         api_settings=api_settings,
-        append_user=OPENING_USER_PROMPT,
+        append_user=OPENING_USER_PROMPTS[lang_of(api_settings)],
     )
     return _streaming_response(
         _stream_assistant_response(

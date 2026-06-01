@@ -238,3 +238,7 @@ pytest
 ```
 
 Tests use real Postgres + pgvector. LLM call sites are monkeypatched.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

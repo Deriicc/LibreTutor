@@ -113,9 +113,10 @@ def test_material_schema_accepts_valid_payload():
     assert len(parsed.keyphrases) >= 3
 
 
-def test_material_schema_requires_at_least_two_must_anchor():
+def test_material_schema_requires_at_least_one_must_anchor():
     bad = _valid_material_payload()
-    bad["knowledge_checklist"][1]["must_anchor"] = False  # leave only 1 must_anchor
+    for item in bad["knowledge_checklist"]:
+        item["must_anchor"] = False  # zero must_anchor → invalid
     with pytest.raises(Exception):
         val.KPMaterialPayload.model_validate(bad)
 
@@ -123,6 +124,15 @@ def test_material_schema_requires_at_least_two_must_anchor():
 def test_material_schema_rejects_too_few_checklist_items():
     bad = _valid_material_payload()
     bad["knowledge_checklist"] = bad["knowledge_checklist"][:2]
+    with pytest.raises(Exception):
+        val.KPMaterialPayload.model_validate(bad)
+
+
+def test_material_schema_rejects_too_many_checklist_items():
+    bad = _valid_material_payload()
+    # New cap is 5 (was 7); 6 items must be rejected.
+    base = bad["knowledge_checklist"][0]
+    bad["knowledge_checklist"] = [dict(base, concept=f"c{i}") for i in range(6)]
     with pytest.raises(Exception):
         val.KPMaterialPayload.model_validate(bad)
 

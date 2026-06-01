@@ -3,7 +3,7 @@
 教学物料的作用：
 - `layer3_prompt`：1-3 句中文，提示老师如何切入讲解该 KP（核心概念 / 易错点），用于对话引导
 - `keyphrases`：3-5 个该 KP 的核心关键词，用于 RAG query 锚定 + 对话引导词显示
-- `knowledge_checklist`：3-7 个该 KP 必须覆盖的概念地图，用于对话覆盖度引导 + 评估对照
+- `knowledge_checklist`：3-5 个该 KP 必须覆盖的概念地图，用于对话覆盖度引导 + 评估对照
 
 严格遵守 Pro-QuEST 命题原则的物料层要求：
 - Document-grounded：所有概念必须能从给定文本中找到依据，禁止引入文本外知识
@@ -29,7 +29,7 @@
       "description": "1-2 句话简要说明这个概念是什么 / 为什么重要",
       "must_anchor": true
     }
-    /* 共 3-7 项；must_anchor=true 表示该概念必须经过对话的"锚定阶段"
+    /* 共 3-5 项；must_anchor=true 表示该概念必须经过对话的"锚定阶段"
        （由教师明确给出定义/公式/例子），false 表示在"引导阶段"讨论即可。
        核心定义、关键公式、关键判定条件应当 must_anchor=true；
        周边支撑概念、应用例子可以 must_anchor=false。
@@ -42,5 +42,5 @@
 约束（违反即视为不合规）：
 - layer3_prompt 不少于 10 字
 - keyphrases 长度 3-5
-- knowledge_checklist 长度 3-7，且至少 2 项 must_anchor=true
+- knowledge_checklist 长度 3-5，且至少 1 项 must_anchor=true
 - 概念名简洁，不要包含引号、星号等无关字符

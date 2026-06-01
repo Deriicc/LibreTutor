@@ -18,12 +18,22 @@ from app.models import (
 )
 
 
+def _fill_page(page, i: int, label: str = "lorem ipsum dolor sit amet consectetur") -> None:
+    """Fill a page with enough text that any multi-page section exceeds
+    builder.SHORT_SECTION_CHARS, so it goes through the LLM extraction path
+    rather than the short-section fast-path."""
+    y = 56
+    for j in range(45):
+        page.insert_text((40, y), f"Page {i + 1} line {j}: {label}.")
+        y += 16
+
+
 def _make_fixture_pdf(tmp_path: Path) -> Path:
-    """Build a tiny PDF with a 2-level outline and dummy page text."""
+    """Build a PDF with a 2-level outline and long page text (LLM path)."""
     doc = fitz.open()
     for i in range(12):
         page = doc.new_page()
-        page.insert_text((50, 72), f"Page {i + 1}: lorem ipsum content for testing.")
+        _fill_page(page, i)
     toc = [
         [1, "Chapter 1", 1],
         [2, "Section 1.1", 1],
@@ -40,11 +50,11 @@ def _make_fixture_pdf(tmp_path: Path) -> Path:
 
 
 def _make_fixture_pdf_no_outline(tmp_path: Path) -> Path:
-    """Build a tiny PDF with no outline so the LLM-skeleton fallback runs."""
+    """Build a PDF with no outline (LLM-skeleton fallback runs) + long pages."""
     doc = fitz.open()
     for i in range(12):
         page = doc.new_page()
-        page.insert_text((50, 72), f"Page {i + 1}: lorem ipsum content for testing.")
+        _fill_page(page, i)
     out = tmp_path / "fixture_no_outline.pdf"
     doc.save(str(out))
     doc.close()
@@ -55,7 +65,7 @@ def _is_skeleton_call(messages: list[dict]) -> bool:
     return "推断这份资料合理的两层章节骨架" in messages[0]["content"]
 
 
-def _stub_kp_response(page_start: int, page_end: int, count: int = 4) -> str:
+def _stub_kp_response(page_start: int, page_end: int, count: int = 3) -> str:
     return json.dumps(
         {
             "knowledge_points": [
@@ -142,21 +152,15 @@ async def test_extract_kps_validates_and_retries_once_on_bad_output(monkeypatch)
     async def stub(_api, messages):
         calls["n"] += 1
         if calls["n"] == 1:
-            # Too few KPs (2 < 3) → should fail validation and retry
-            return json.dumps(
-                {
-                    "knowledge_points": [
-                        {"title": "x", "page_start": 1, "page_end": 5},
-                        {"title": "y", "page_start": 1, "page_end": 5},
-                    ]
-                }
-            )
-        return _stub_kp_response(1, 5, count=3)
+            # Too many KPs (4 > 3) → should fail validation and retry
+            return _stub_kp_response(1, 5, count=4)
+        return _stub_kp_response(1, 5, count=2)
 
     monkeypatch.setattr(builder, "complete_json", stub)
     kps = await builder.extract_kps_for_section(section, "...", api_settings={})
     assert calls["n"] == 2
-    assert len(kps) == 3
+    assert 1 <= len(kps) <= 3
+    assert len(kps) == 2
     assert all(kp.page_start == 1 and kp.page_end == 5 for kp in kps)
 
 
@@ -186,6 +190,18 @@ async def test_extract_kps_rejects_pages_out_of_section_range(monkeypatch):
     assert calls["n"] == 2  # initial + 1 retry
 
 
+async def test_extract_kps_rejects_too_many(monkeypatch):
+    """New cap: >3 KPs is invalid (was <=7). Always returning 4 → raises."""
+    section = builder.SectionLayout(title="t", page_start=1, page_end=5)
+
+    async def stub(_api, _messages):
+        return _stub_kp_response(1, 5, count=4)
+
+    monkeypatch.setattr(builder, "complete_json", stub)
+    with pytest.raises(ValueError, match="LLM 输出不合规"):
+        await builder.extract_kps_for_section(section, "...", api_settings={})
+
+
 async def test_compute_chapter_tree_end_to_end(tmp_path, monkeypatch):
     pdf_path = _make_fixture_pdf(tmp_path)
 
@@ -194,7 +210,7 @@ async def test_compute_chapter_tree_end_to_end(tmp_path, monkeypatch):
         m = re.search(r"页码范围：(\d+) - (\d+)", user_msg)
         assert m, f"unexpected user prompt: {user_msg!r}"
         ps, pe = int(m.group(1)), int(m.group(2))
-        return _stub_kp_response(ps, pe, count=5)
+        return _stub_kp_response(ps, pe, count=3)
 
     monkeypatch.setattr(builder, "complete_json", stub)
 
@@ -209,7 +225,7 @@ async def test_compute_chapter_tree_end_to_end(tmp_path, monkeypatch):
     assert all(len(ch.sections) == 2 for ch in body)
     for ch in body:
         for sec in ch.sections:
-            assert 3 <= len(sec.knowledge_points) <= 7
+            assert 1 <= len(sec.knowledge_points) <= 3
             for kp in sec.knowledge_points:
                 assert kp.title.strip()
                 assert kp.page_start >= 1
@@ -218,13 +234,60 @@ async def test_compute_chapter_tree_end_to_end(tmp_path, monkeypatch):
                 assert kp.kind is None  # body KPs are not synthetic
 
 
+def _make_fixture_pdf_short(tmp_path: Path) -> Path:
+    """Same TOC as _make_fixture_pdf but tiny page text, so every section is
+    under SHORT_SECTION_CHARS and takes the fast-path (no LLM call)."""
+    doc = fitz.open()
+    for i in range(12):
+        page = doc.new_page()
+        page.insert_text((50, 72), f"Page {i + 1}: short.")
+    toc = [
+        [1, "Chapter 1", 1],
+        [2, "Section 1.1", 1],
+        [2, "Section 1.2", 4],
+        [1, "Chapter 2", 7],
+        [2, "Section 2.1", 7],
+        [2, "Section 2.2", 10],
+    ]
+    doc.set_toc(toc)
+    out = tmp_path / "fixture_short.pdf"
+    doc.save(str(out))
+    doc.close()
+    return out
+
+
+async def test_compute_chapter_tree_short_sections_use_fast_path(tmp_path, monkeypatch):
+    """Short sections collapse to one KP synthesized from the section title,
+    with no LLM call at all (the stub raises if reached)."""
+    pdf_path = _make_fixture_pdf_short(tmp_path)
+
+    async def stub(_api, _messages):
+        raise AssertionError("LLM must not be called for short sections")
+
+    monkeypatch.setattr(builder, "complete_json", stub)
+
+    tree = await builder.compute_chapter_tree(str(pdf_path), api_settings={})
+
+    body = tree[1:-1]  # strip synthetic 全书导读/全书总结
+    assert len(body) == 2
+    assert all(len(ch.sections) == 2 for ch in body)
+    for ch in body:
+        for sec in ch.sections:
+            assert len(sec.knowledge_points) == 1  # fast-path: one KP
+            kp = sec.knowledge_points[0]
+            assert kp.title == sec.title
+            assert kp.page_start >= 1
+            assert kp.page_end >= kp.page_start
+            assert kp.kind is None
+
+
 def _make_fixture_pdf_with_matter(tmp_path: Path) -> Path:
     """PDF whose TOC has 序言 (front) and 附录 (back) as level-1 chapters,
     each with a level-2 section so they survive `_parse_toc_layout`."""
     doc = fitz.open()
     for i in range(12):
         page = doc.new_page()
-        page.insert_text((50, 72), f"Page {i + 1}: body text for testing.")
+        _fill_page(page, i, "body text for testing")
     toc = [
         [1, "序言", 1],
         [2, "序言", 1],
@@ -255,7 +318,7 @@ async def test_compute_chapter_tree_brackets_body_with_overview_and_summary(
         assert m, f"unexpected KP-extraction prompt: {user_msg!r}"
         seen_sections.append(m.group(1).strip())
         pr = re.search(r"页码范围：(\d+) - (\d+)", user_msg)
-        return _stub_kp_response(int(pr.group(1)), int(pr.group(2)), count=4)
+        return _stub_kp_response(int(pr.group(1)), int(pr.group(2)), count=3)
 
     monkeypatch.setattr(builder, "complete_json", stub)
 
@@ -361,7 +424,7 @@ async def test_compute_chapter_tree_falls_back_to_llm_skeleton_when_no_outline(
         m = re.search(r"页码范围：(\d+) - (\d+)", user_msg)
         assert m, f"unexpected user prompt: {user_msg!r}"
         ps, pe = int(m.group(1)), int(m.group(2))
-        return _stub_kp_response(ps, pe, count=4)
+        return _stub_kp_response(ps, pe, count=3)
 
     monkeypatch.setattr(builder, "complete_json", stub)
 
@@ -373,7 +436,7 @@ async def test_compute_chapter_tree_falls_back_to_llm_skeleton_when_no_outline(
     assert len(body) == 1
     assert [s.title for s in body[0].sections] == ["节 1.1", "节 1.2"]
     for sec in body[0].sections:
-        assert 3 <= len(sec.knowledge_points) <= 7
+        assert 1 <= len(sec.knowledge_points) <= 3
         for kp in sec.knowledge_points:
             assert sec.knowledge_points[0].page_start >= 1
             assert kp.page_end >= kp.page_start
@@ -521,7 +584,7 @@ async def test_compute_chapter_tree_routes_markdown_via_skeleton(tmp_path, monke
     assert body[0].title == "几何"
     assert len(body[0].sections) == 1
     assert body[0].sections[0].title == "三角形"
-    assert 3 <= len(body[0].sections[0].knowledge_points) <= 7
+    assert 1 <= len(body[0].sections[0].knowledge_points) <= 3
 
 
 async def _make_course(pdf_path: str) -> tuple[uuid.UUID, uuid.UUID]:
@@ -673,7 +736,7 @@ async def test_compute_chapter_tree_from_epub(tmp_path, monkeypatch):
         user_msg = messages[-1]["content"]
         m = re.search(r"页码范围：(\d+) - (\d+)", user_msg)
         assert m, f"unexpected user prompt: {user_msg!r}"
-        return _stub_kp_response(int(m.group(1)), int(m.group(2)), count=4)
+        return _stub_kp_response(int(m.group(1)), int(m.group(2)), count=3)
 
     monkeypatch.setattr(builder, "complete_json", stub)
 
@@ -686,7 +749,7 @@ async def test_compute_chapter_tree_from_epub(tmp_path, monkeypatch):
     assert all(len(ch.sections) == 2 for ch in body)
     for ch in body:
         for sec in ch.sections:
-            assert 3 <= len(sec.knowledge_points) <= 7
+            assert 1 <= len(sec.knowledge_points) <= 3
             for kp in sec.knowledge_points:
                 assert kp.title.strip()
                 assert kp.page_end >= kp.page_start >= 1

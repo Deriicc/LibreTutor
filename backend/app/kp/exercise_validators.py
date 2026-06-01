@@ -69,14 +69,14 @@ class KPMaterialPayload(BaseModel):
 
     layer3_prompt: str = Field(..., min_length=10)
     keyphrases: list[str] = Field(..., min_length=3, max_length=5)
-    knowledge_checklist: list[_ChecklistItem] = Field(..., min_length=3, max_length=7)
+    knowledge_checklist: list[_ChecklistItem] = Field(..., min_length=3, max_length=5)
 
     @model_validator(mode="after")
-    def _at_least_two_must_anchor(self) -> "KPMaterialPayload":
+    def _at_least_one_must_anchor(self) -> "KPMaterialPayload":
         anchor_count = sum(1 for item in self.knowledge_checklist if item.must_anchor)
-        if anchor_count < 2:
+        if anchor_count < 1:
             raise ValueError(
-                f"knowledge_checklist 必须至少包含 2 项 must_anchor=true 的概念，"
+                f"knowledge_checklist 必须至少包含 1 项 must_anchor=true 的概念，"
                 f"实得 {anchor_count} 项"
             )
         return self

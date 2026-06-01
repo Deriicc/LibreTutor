@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLanguage } from "../i18n/LanguageContext";
 
 function parseCourseId(path: string): string | null {
   const m = path.match(/^\/courses\/([^/]+)/);
@@ -7,6 +8,7 @@ function parseCourseId(path: string): string | null {
 }
 
 export function Topbar() {
+  const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
   const courseId = parseCourseId(location.pathname);
@@ -16,7 +18,7 @@ export function Topbar() {
     <header className="topbar">
       <Link to="/" className="topbar-brand">
         <div className="mark">Σ</div>
-        <span>Σωκράτης</span>
+        <span>LibreTutor</span>
       </Link>
 
       <div
@@ -27,19 +29,19 @@ export function Topbar() {
       {courseId && (
         <nav className="topbar-crumbs">
           <Link to={`/courses/${courseId}`} className="crumb">
-            章节树
+            {t("章节树")}
           </Link>
           <span className="sep">/</span>
           <span className="crumb crumb-current">
             {location.pathname.includes("/diary")
-              ? "教师手记"
+              ? t("教师手记")
               : location.pathname.includes("/teacher-config")
-                ? "角色卡"
+                ? t("角色卡")
                 : location.pathname.includes("/exercise")
-                  ? "作业"
+                  ? t("作业")
                   : location.pathname.includes("/kp/")
-                    ? "对话"
-                    : "课程"}
+                    ? t("对话")
+                    : t("课程")}
           </span>
         </nav>
       )}
@@ -54,14 +56,14 @@ export function Topbar() {
             className="btn btn-quiet btn-sm"
             onClick={() => navigate(`/courses/${courseId}/teacher-config`)}
           >
-            角色卡
+            {t("角色卡")}
           </button>
           <button
             type="button"
             className="btn btn-quiet btn-sm"
             onClick={() => navigate(`/courses/${courseId}/diary`)}
           >
-            教师手记
+            {t("教师手记")}
           </button>
         </div>
       )}
@@ -72,7 +74,7 @@ export function Topbar() {
           className="btn btn-quiet btn-sm"
           onClick={() => navigate("/settings")}
         >
-          设置
+          {t("设置")}
         </button>
       </div>
 
@@ -81,7 +83,7 @@ export function Topbar() {
         type="button"
         className="topbar-hamburger"
         onClick={() => setMenuOpen(!menuOpen)}
-        aria-label="菜单"
+        aria-label={t("菜单")}
       >
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
           {menuOpen ? (
@@ -107,14 +109,14 @@ export function Topbar() {
                   className="topbar-mobile-link"
                   onClick={() => { navigate(`/courses/${courseId}/teacher-config`); setMenuOpen(false); }}
                 >
-                  角色卡
+                  {t("角色卡")}
                 </button>
                 <button
                   type="button"
                   className="topbar-mobile-link"
                   onClick={() => { navigate(`/courses/${courseId}/diary`); setMenuOpen(false); }}
                 >
-                  教师手记
+                  {t("教师手记")}
                 </button>
                 <div className="topbar-mobile-divider" />
               </>
@@ -124,7 +126,7 @@ export function Topbar() {
               className="topbar-mobile-link"
               onClick={() => { navigate("/settings"); setMenuOpen(false); }}
             >
-              设置
+              {t("设置")}
             </button>
           </div>
         </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { runAssessment, AssessmentError } from "../api/assessment";
 import type { Assessment } from "../api/assessment";
+import { useLanguage } from "../i18n/LanguageContext";
 
 const COVERAGE_WARN_THRESHOLD = 0.6;
 
@@ -12,6 +13,7 @@ type LoadState =
 
 function CoverageRing({ ratio }: { ratio: number }) {
   // Ratio in [0, 1]. Renders a 240×140 half-donut + percentage center text.
+  const { t } = useLanguage();
   const pct = Math.max(0, Math.min(1, ratio));
   const dash = pct * 151; // arc length is ~151 for r=48 half-circle
   const danger = pct < COVERAGE_WARN_THRESHOLD;
@@ -51,7 +53,7 @@ function CoverageRing({ ratio }: { ratio: number }) {
           fontSize="9"
           fill="var(--ink-4)"
         >
-          覆盖度
+          {t("覆盖度")}
         </text>
       </svg>
     </div>
@@ -69,6 +71,7 @@ function ConceptList({
   toneClass: string;
   items: { concept: string; detail: string }[];
 }) {
+  const { t } = useLanguage();
   return (
     <div className={`assessment-bucket ${toneClass}`}>
       <div className="assessment-bucket-head">
@@ -77,7 +80,7 @@ function ConceptList({
         <span className="assessment-bucket-count mono">{items.length}</span>
       </div>
       {items.length === 0 ? (
-        <div className="assessment-bucket-empty margin-note">（无）</div>
+        <div className="assessment-bucket-empty margin-note">{t("（无）")}</div>
       ) : (
         <ul className="assessment-bucket-list">
           {items.map((it) => (
@@ -95,6 +98,7 @@ function ConceptList({
 }
 
 export function AssessmentPage() {
+  const { t } = useLanguage();
   const { courseId, kpId } = useParams<{
     courseId: string;
     kpId: string;
@@ -114,7 +118,7 @@ export function AssessmentPage() {
       .catch((err: unknown) => {
         if (cancelled) return;
         const msg =
-          err instanceof AssessmentError ? err.message : "评估失败";
+          err instanceof AssessmentError ? err.message : t("评估失败");
         setState({ kind: "error", message: msg });
       });
     return () => {
@@ -132,8 +136,10 @@ export function AssessmentPage() {
     const ratio = state.assessment.coverage_ratio;
     if (ratio < COVERAGE_WARN_THRESHOLD) {
       const ok = window.confirm(
-        `对话覆盖度只有 ${Math.round(ratio * 100)}%，作业题量已自动减少。` +
-          `\n\n确认要直接进入作业吗？也可以选择"返回继续学习"`,
+        t(
+          "对话覆盖度只有 {pct}%，作业题量已自动减少。\n\n确认要直接进入作业吗？也可以选择「返回继续学习」",
+          { pct: Math.round(ratio * 100) },
+        ),
       );
       if (!ok) return;
     }
@@ -145,10 +151,10 @@ export function AssessmentPage() {
       <div className="assessment-shell">
         <header className="assessment-head">
           <div className="margin-note" style={{ fontSize: 11, letterSpacing: "0.1em" }}>
-            学习评估
+            {t("学习评估")}
           </div>
           <h1 style={{ margin: "4px 0 0", fontFamily: "Newsreader, serif" }}>
-            老师对你的掌握情况怎么看
+            {t("课程评估结果")}
           </h1>
         </header>
 
@@ -161,7 +167,7 @@ export function AssessmentPage() {
                 <span />
               </div>
               <div className="margin-note" style={{ marginTop: 12 }}>
-                正在翻看你和老师的对话…
+                {t("正在翻看你和老师的对话…")}
               </div>
             </div>
           </div>
@@ -171,7 +177,7 @@ export function AssessmentPage() {
           <div className="card assessment-card">
             <div className="assessment-error">
               <div style={{ color: "var(--accent)", fontWeight: 500 }}>
-                评估失败
+                {t("评估失败")}
               </div>
               <div className="margin-note" style={{ marginTop: 6 }}>
                 {state.message}
@@ -184,7 +190,7 @@ export function AssessmentPage() {
                     navigate(`/courses/${courseId}/kp/${kpId}`)
                   }
                 >
-                  ← 返回对话
+                  {t("← 返回对话")}
                 </button>
                 <button
                   type="button"
@@ -200,12 +206,12 @@ export function AssessmentPage() {
                         const msg =
                           err instanceof AssessmentError
                             ? err.message
-                            : "评估失败";
+                            : t("评估失败");
                         setState({ kind: "error", message: msg });
                       });
                   }}
                 >
-                  重试
+                  {t("重试")}
                 </button>
               </div>
             </div>
@@ -219,7 +225,7 @@ export function AssessmentPage() {
                 <CoverageRing ratio={state.assessment.coverage_ratio} />
                 <div className="assessment-summary-text">
                   <div className="margin-note" style={{ fontSize: 11 }}>
-                    老师的判断
+                    {t("老师的判断")}
                   </div>
                   <div
                     className="serif"
@@ -237,15 +243,15 @@ export function AssessmentPage() {
 
               {state.assessment.coverage_ratio < COVERAGE_WARN_THRESHOLD && (
                 <div className="assessment-warning">
-                  <strong>覆盖不足</strong>
-                  ：建议先回到对话，重点聊一下「未触及」清单里的概念，再来做作业。
+                  <strong>{t("覆盖不足")}</strong>
+                  {t("：建议先回到对话，重点聊一下「未触及」清单里的概念，再来做作业。")}
                 </div>
               )}
             </div>
 
             <div className="assessment-buckets">
               <ConceptList
-                title="已掌握"
+                title={t("已掌握")}
                 glyph="✓"
                 toneClass="bucket-covered"
                 items={state.assessment.covered.map((c) => ({
@@ -254,7 +260,7 @@ export function AssessmentPage() {
                 }))}
               />
               <ConceptList
-                title="部分掌握"
+                title={t("部分掌握")}
                 glyph="~"
                 toneClass="bucket-partial"
                 items={state.assessment.partial.map((p) => ({
@@ -263,7 +269,7 @@ export function AssessmentPage() {
                 }))}
               />
               <ConceptList
-                title="未触及"
+                title={t("未触及")}
                 glyph="—"
                 toneClass="bucket-untouched"
                 items={state.assessment.untouched.map((u) => ({
@@ -278,14 +284,15 @@ export function AssessmentPage() {
                 className="margin-note"
                 style={{ fontSize: 12, lineHeight: 1.6 }}
               >
-                老师将按本次掌握情况自动出 {state.assessment.suggested_count} 道题
-                ·
-                {" "}
+                {t("老师将按本次掌握情况自动出 {n} 道题", {
+                  n: state.assessment.suggested_count,
+                })}
+                {" · "}
                 {state.assessment.suggested_difficulty === "easy"
-                  ? "简单档"
+                  ? t("简单档")
                   : state.assessment.suggested_difficulty === "hard"
-                    ? "困难档"
-                    : "正常档"}
+                    ? t("困难档")
+                    : t("正常档")}
               </div>
             </div>
 
@@ -297,14 +304,14 @@ export function AssessmentPage() {
                   navigate(`/courses/${courseId}/kp/${kpId}`)
                 }
               >
-                ← 返回继续学习
+                {t("← 返回继续学习")}
               </button>
               <button
                 type="button"
                 className="btn btn-accent btn-lg"
                 onClick={handleStartWithConfirm}
               >
-                开始作业 →
+                {t("开始作业 →")}
               </button>
             </div>
           </>

@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
+import { useLanguage } from "../i18n/LanguageContext";
 
 type Props = {
   value: string;
@@ -50,6 +51,7 @@ export function RichTextEditor({
 }: Props) {
   // Keep keystrokes responsive: the textarea updates immediately while the
   // Markdown+KaTeX preview re-parses at a deferred, non-blocking priority.
+  const { t } = useLanguage();
   const deferredValue = useDeferredValue(value);
   return (
     <div>
@@ -58,17 +60,14 @@ export function RichTextEditor({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         rows={rows}
-        placeholder={
-          placeholder ??
-          "支持 Markdown：**粗体** *斜体* - 列表  +  行内公式 $a^2+b^2=c^2$"
-        }
+        placeholder={placeholder}
         style={TEXTAREA_STYLE}
       />
       <p style={HINT_STYLE}>
-        提示：行内公式用 <code>$...$</code>；块级公式用 <code>$$...$$</code>。
+        {t("提示：支持 Markdown 与数学公式。行内公式 $...$，块级 $$...$$。")}
       </p>
       {deferredValue.trim() && (
-        <div style={PREVIEW_STYLE} aria-label="预览">
+        <div style={PREVIEW_STYLE} aria-label={t("预览")}>
           <ReactMarkdown
             remarkPlugins={[remarkMath]}
             rehypePlugins={[rehypeKatex]}

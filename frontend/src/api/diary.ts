@@ -1,3 +1,5 @@
+import { et } from "../i18n/translations";
+
 export type DiaryEntryStatus = "pending" | "running" | "done" | "failed";
 
 export type DiaryEntry = {
@@ -32,7 +34,7 @@ export async function getCourseDiary(
     credentials: "include",
   });
   if (!res.ok) {
-    throw new DiaryError(res.status, `加载日记失败 (HTTP ${res.status})`);
+    throw new DiaryError(res.status, et("加载日记失败 (HTTP {status})", { status: res.status }));
   }
   return (await res.json()) as CourseDiary;
 }

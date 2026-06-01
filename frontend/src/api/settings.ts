@@ -6,6 +6,7 @@ export type ApiSettings = {
   embedding_api_key: string;
   embedding_base_url: string;
   embedding_model: string;
+  language: string;
 };
 
 export type TestResult = { ok: boolean; detail: string };

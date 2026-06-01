@@ -14,6 +14,7 @@ import type {
   KPStatus,
   KnowledgePointNode,
 } from "../api/courses";
+import { useLanguage } from "../i18n/LanguageContext";
 
 type LoadState =
   | { kind: "loading" }
@@ -37,15 +38,17 @@ const POLL_INTERVAL_MS = 2000;
 /* ---------- ChapterTree sidebar component ---------- */
 
 function StatusGlyph({ status }: { status: KPStatus }) {
+  const { t } = useLanguage();
   return (
     <span
       className={`dot dot-${status === "in_progress" ? "progress" : status}`}
-      title={STATUS_LABEL[status]}
+      title={t(STATUS_LABEL[status])}
     />
   );
 }
 
 function TreeHeader({ tree }: { tree: ChapterTree }) {
+  const { t } = useLanguage();
   const allKps = tree.chapters
     .flatMap((ch) => ch.sections.flatMap((s) => s.knowledge_points))
     .filter((k) => !isSyntheticKp(k));
@@ -53,7 +56,7 @@ function TreeHeader({ tree }: { tree: ChapterTree }) {
   const total = allKps.length;
   return (
     <div className="tree-header">
-      <div className="tree-header-title serif">章节树</div>
+      <div className="tree-header-title serif">{t("章节树")}</div>
       <div className="tree-header-meta">
         <span className="tnum mono">{passed}</span>
         <span style={{ color: "var(--ink-4)" }}> / {total} KP</span>
@@ -66,13 +69,13 @@ function TreeHeader({ tree }: { tree: ChapterTree }) {
       </div>
       <div className="tree-legend">
         <span>
-          <span className="dot dot-passed" /> 通过
+          <span className="dot dot-passed" /> {t("通过")}
         </span>
         <span>
-          <span className="dot dot-progress" /> 学习中
+          <span className="dot dot-progress" /> {t("学习中")}
         </span>
         <span>
-          <span className="dot dot-untouched" /> 未开始
+          <span className="dot dot-untouched" /> {t("未开始")}
         </span>
       </div>
     </div>
@@ -86,6 +89,7 @@ function ChapterTree({
   tree: ChapterTree;
   onSelectKp: (kp: KnowledgePointNode) => void;
 }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     tree.chapters.forEach((ch) => {
@@ -158,12 +162,15 @@ function ChapterTree({
                     >
                       <span className="indent" />
                       <span className="indent" />
+                      <span className="twirl" style={{ visibility: "hidden" }}>
+                        ▸
+                      </span>
                       {isSyntheticKp(kp) ? (
                         <span
                           className="kp-kind-badge"
-                          title="只读：可与老师对话，不计入进度"
+                          title={t("只读：可与老师对话，不计入进度")}
                         >
-                          {kpKind(kp) === "summary" ? "总结" : "导读"}
+                          {kpKind(kp) === "summary" ? t("总结") : t("导读")}
                         </span>
                       ) : (
                         <StatusGlyph status={kp.status} />
@@ -202,15 +209,15 @@ const STAGE_BLURB: Record<GenStage, { title: string; lines: string[] }> = {
     lines: [
       "纸册之上，先识其骨。",
       "系统正在阅读 PDF 文本，由 LLM 推断章节骨架——",
-      "目录决定我们的学习路径，约需 1~2 分钟。",
+      "目录决定我们的学习路径",
     ],
   },
   kps: {
     title: "切分知识点",
     lines: [
       "目录已知，章节小节皆已就位。",
-      "现在为每一节切出 3~7 个聚焦单一概念的知识点，",
-      "多节并发处理，互不阻塞——是整个流程里最耗时的一段。",
+      "现在为每一节切出 1~3 个聚焦单一概念的知识点，",
+      "多节并发处理，互不阻塞",
     ],
   },
   binding: {
@@ -223,6 +230,7 @@ const STAGE_BLURB: Record<GenStage, { title: string; lines: string[] }> = {
 };
 
 function GenerationHero({ course }: { course: Course }) {
+  const { t } = useLanguage();
   const stage = deriveGenStage(course);
   const activeIdx = GEN_STAGES.findIndex((s) => s.key === stage);
   const pct =
@@ -251,7 +259,7 @@ function GenerationHero({ course }: { course: Course }) {
           <circle cx="3.6" cy="20.4" r="0.9" fill="currentColor" />
         </svg>
         <span className="gen-title-text serif">
-          正在誊抄章节树
+          {t("正在誊抄章节树")}
           <span className="gen-dots">
             <span>·</span>
             <span>·</span>
@@ -262,7 +270,7 @@ function GenerationHero({ course }: { course: Course }) {
           <span className="gen-count mono tnum">
             {course.progress_done}
             <span style={{ color: "var(--ink-5)" }}> / </span>
-            {course.progress_total} 节
+            {course.progress_total} {t("节")}
           </span>
         )}
       </div>
@@ -291,14 +299,14 @@ function GenerationHero({ course }: { course: Course }) {
           >
             {i < GEN_STAGES.length - 1 && <div className="gen-stage-line" />}
             <div className="gen-stage-dot" />
-            <div className="gen-stage-label">{s.label}</div>
+            <div className="gen-stage-label">{t(s.label)}</div>
           </div>
         ))}
       </div>
 
       <div key={stage} className="gen-blurb">
-        <div className="gen-blurb-label margin-note">本阶段</div>
-        <div className="gen-blurb-title serif">{blurb.title}</div>
+        <div className="gen-blurb-label margin-note">{t("本阶段")}</div>
+        <div className="gen-blurb-title serif">{t(blurb.title)}</div>
         <div className="gen-blurb-body">
           {blurb.lines.map((line, i) => (
             <div
@@ -306,14 +314,14 @@ function GenerationHero({ course }: { course: Course }) {
               className="gen-blurb-line"
               style={{ animationDelay: `${i * 90}ms` }}
             >
-              {line}
+              {t(line)}
             </div>
           ))}
         </div>
       </div>
 
       <div className="margin-note gen-footnote">
-        每 {POLL_INTERVAL_MS / 1000} 秒自动刷新 · 全程约 5~8 分钟 · 可离开页面
+        {t("每 {n} 秒自动刷新 · 全程约 5~8 分钟 · 可离开页面", { n: POLL_INTERVAL_MS / 1000 })}
       </div>
     </div>
   );
@@ -346,6 +354,7 @@ function findContinueKp(
 }
 
 export function CoursePage() {
+  const { t } = useLanguage();
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -375,7 +384,7 @@ export function CoursePage() {
         if (err instanceof CoursesError) {
           setState({ kind: "error", status: err.status, message: err.message });
         } else {
-          setState({ kind: "error", status: 0, message: "加载失败" });
+          setState({ kind: "error", status: 0, message: t("加载失败") });
         }
       }
     }
@@ -402,13 +411,13 @@ export function CoursePage() {
           className="margin-note"
           style={{ textAlign: "center", padding: "60px 0 40px" }}
         >
-          加载中…
+          {t("加载中…")}
         </div>
       )}
 
       {state.kind === "error" && (
         <div style={{ padding: 48, textAlign: "center", color: "var(--accent)" }}>
-          {state.status === 404 ? "Course 不存在或无权访问" : state.message}
+          {state.status === 404 ? t("Course 不存在或无权访问") : state.message}
         </div>
       )}
 
@@ -433,7 +442,7 @@ export function CoursePage() {
                     className="margin-note"
                     style={{ marginTop: 18, textAlign: "center" }}
                   >
-                    章节骨架尚未落定…
+                    {t("章节骨架尚未落定…")}
                   </div>
                 </div>
               ) : (
@@ -451,12 +460,12 @@ export function CoursePage() {
           <main className="course-main">
             <div className="margin-note">
               {state.course.generation_status === "done"
-                ? "课程已就绪"
+                ? t("课程已就绪")
                 : state.course.generation_status === "running"
-                  ? "正在生成章节树…"
+                  ? t("正在生成章节树…")
                   : state.course.generation_status === "failed"
-                    ? "生成失败"
-                    : "等待生成"}
+                    ? t("生成失败")
+                    : t("等待生成")}
             </div>
             <h1 style={{ margin: "4px 0 8px" }}>{state.course.name}</h1>
             <div
@@ -480,18 +489,18 @@ export function CoursePage() {
                     ),
                   0,
                 )}{" "}
-                个 KP
+                {t("个 KP")}
               </span>
               <span
                 className={`pill ${state.course.generation_status === "done" ? "pill-sage" : state.course.generation_status === "failed" ? "pill-accent" : "pill-ochre"}`}
               >
                 {state.course.generation_status === "done"
-                  ? "已完成"
+                  ? t("已完成")
                   : state.course.generation_status === "running"
-                    ? "生成中"
+                    ? t("生成中")
                     : state.course.generation_status === "failed"
-                      ? "失败"
-                      : "等待中"}
+                      ? t("失败")
+                      : t("等待中")}
               </span>
             </div>
 
@@ -512,10 +521,10 @@ export function CoursePage() {
                 }}
               >
                 <div className="serif" style={{ fontSize: 18, marginBottom: 8 }}>
-                  章节树生成失败
+                  {t("章节树生成失败")}
                 </div>
                 <div style={{ color: "var(--ink-2)", fontSize: 14 }}>
-                  {state.course.generation_error ?? "未知错误"}
+                  {state.course.generation_error ?? t("未知错误")}
                 </div>
               </div>
             )}
@@ -523,7 +532,7 @@ export function CoursePage() {
             {/* Continue learning card */}
             {state.course.generation_status === "done" && continueTarget && (
               <div className="continue-card">
-                <div className="continue-label">继续从这里学</div>
+                <div className="continue-label">{t("继续从这里学")}</div>
                 <div className="continue-title serif">
                   {continueTarget.kp.title}
                 </div>
@@ -541,7 +550,7 @@ export function CoursePage() {
                       )
                     }
                   >
-                    继续对话 →
+                    {t("继续对话 →")}
                   </button>
                   <button
                     className="btn btn-ghost"
@@ -551,7 +560,7 @@ export function CoursePage() {
                       )
                     }
                   >
-                    跳到作业
+                    {t("跳到作业")}
                   </button>
                 </div>
               </div>
@@ -560,7 +569,7 @@ export function CoursePage() {
             {/* Chapter overview */}
             {state.course.generation_status === "done" && (
               <>
-                <h3 style={{ margin: "36px 0 8px" }}>章节进度概览</h3>
+                <h3 style={{ margin: "36px 0 8px" }}>{t("章节进度概览")}</h3>
                 <div className="ch-overview">
                   {state.tree.chapters.map((ch) => {
                     const kps = ch.sections.flatMap((s) => s.knowledge_points);
@@ -585,7 +594,7 @@ export function CoursePage() {
                               style={{
                                 background: STATUS_BG[k.status],
                               }}
-                              title={`${k.title} (${STATUS_LABEL[k.status]})`}
+                              title={`${k.title} (${t(STATUS_LABEL[k.status])})`}
                             />
                           ))}
                         </div>

@@ -1,3 +1,5 @@
+import { et } from "../i18n/translations";
+
 export type MessageRole = "user" | "assistant";
 
 export type ChatMessage = {
@@ -22,7 +24,7 @@ export async function listMessages(
     { credentials: "include" },
   );
   if (!res.ok) {
-    throw new ChatError(res.status, `加载消息失败 (HTTP ${res.status})`);
+    throw new ChatError(res.status, et("加载消息失败 (HTTP {status})", { status: res.status }));
   }
   return (await res.json()) as ChatMessage[];
 }
@@ -68,7 +70,7 @@ async function _parseSSE(
             message?: string;
           };
           if (eventName === "error") {
-            handlers.onError(parsed.message ?? "未知错误");
+            handlers.onError(parsed.message ?? et("未知错误"));
             return;
           }
           if (eventName === "done") {
@@ -85,7 +87,7 @@ async function _parseSSE(
     }
   } catch (err) {
     if ((err as { name?: string })?.name === "AbortError") return;
-    handlers.onError("流式读取异常");
+    handlers.onError(et("流式读取异常"));
   }
 }
 
@@ -107,12 +109,12 @@ async function _postStream(
     });
   } catch (err) {
     if ((err as { name?: string })?.name === "AbortError") return;
-    handlers.onError("网络错误");
+    handlers.onError(et("网络错误"));
     return;
   }
 
   if (!res.ok || !res.body) {
-    let message = `请求失败 (HTTP ${res.status})`;
+    let message = et("请求失败 (HTTP {status})", { status: res.status });
     try {
       const errBody = (await res.json()) as { detail?: unknown };
       if (typeof errBody.detail === "string") message = errBody.detail;

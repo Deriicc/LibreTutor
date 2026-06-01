@@ -1,3 +1,5 @@
+import { et } from "../i18n/translations";
+
 export type TeacherConfig = {
   scene: string;
   learner_context: string;
@@ -115,12 +117,12 @@ export async function streamTestChat(
     );
   } catch (err) {
     if ((err as { name?: string })?.name === "AbortError") return;
-    handlers.onError("网络错误");
+    handlers.onError(et("网络错误"));
     return;
   }
 
   if (!res.ok || !res.body) {
-    let message = `请求失败 (HTTP ${res.status})`;
+    let message = et("请求失败 (HTTP {status})", { status: res.status });
     try {
       const errBody = (await res.json()) as { detail?: unknown };
       if (typeof errBody.detail === "string") message = errBody.detail;
@@ -160,7 +162,7 @@ export async function streamTestChat(
             message?: string;
           };
           if (eventName === "error") {
-            handlers.onError(parsed.message ?? "未知错误");
+            handlers.onError(parsed.message ?? et("未知错误"));
             return;
           }
           if (eventName === "done") {
@@ -177,6 +179,6 @@ export async function streamTestChat(
     }
   } catch (err) {
     if ((err as { name?: string })?.name === "AbortError") return;
-    handlers.onError("流式读取异常");
+    handlers.onError(et("流式读取异常"));
   }
 }

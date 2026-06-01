@@ -21,6 +21,7 @@ import type { ChatMessage, MessageRole, StreamHandlers } from "../api/chat";
 import { getKPContent } from "../api/kp";
 import { getTeacherConfig, teacherAvatarUrl } from "../api/teacher";
 import { MarkdownView } from "../components/RichTextEditor";
+import { useLanguage } from "../i18n/LanguageContext";
 
 type LoadState =
   | { kind: "loading" }
@@ -34,6 +35,8 @@ type ChatBubble = {
   content: string;
   pending?: boolean;
 };
+
+const SOFT_TURN_LIMIT = 15;
 
 function toBubble(m: ChatMessage): ChatBubble {
   return { key: m.id, role: m.role, content: m.content };
@@ -74,6 +77,7 @@ const MiniChapterTree = memo(function MiniChapterTree({
   currentKpId: string;
   onSelectKp: (kpId: string) => void;
 }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
     tree.chapters.forEach((ch) => {
@@ -153,7 +157,7 @@ const MiniChapterTree = memo(function MiniChapterTree({
                         {isCurrent ? (
                           <span
                             className="tree-glyph current"
-                            title="当前所在 KP"
+                            title={t("当前所在 KP")}
                           >
                             ▸
                           </span>
@@ -175,9 +179,9 @@ const MiniChapterTree = memo(function MiniChapterTree({
 
 /* ---------- Turn gauge ---------- */
 
-function TurnGauge({ turn, soft, hard }: { turn: number; soft: number; hard: number }) {
-  const pct = Math.min(turn / hard, 1);
-  const tickAngle = (soft / hard) * 180;
+function TurnGauge({ turn, limit }: { turn: number; limit: number }) {
+  const { t } = useLanguage();
+  const pct = Math.min(turn / limit, 1);
   return (
     <div className="turn-gauge">
       <svg viewBox="0 0 120 70" width="100%">
@@ -195,14 +199,6 @@ function TurnGauge({ turn, soft, hard }: { turn: number; soft: number; hard: num
           strokeWidth="6"
           strokeLinecap="round"
           strokeDasharray={`${pct * 151} 200`}
-        />
-        <line
-          x1={60 + Math.cos(((180 - tickAngle) * Math.PI) / 180) * 42}
-          y1={60 - Math.sin(((180 - tickAngle) * Math.PI) / 180) * 42}
-          x2={60 + Math.cos(((180 - tickAngle) * Math.PI) / 180) * 54}
-          y2={60 - Math.sin(((180 - tickAngle) * Math.PI) / 180) * 54}
-          stroke="var(--ink-3)"
-          strokeWidth="1.5"
         />
         <text
           x="60"
@@ -222,17 +218,117 @@ function TurnGauge({ turn, soft, hard }: { turn: number; soft: number; hard: num
           fontSize="8"
           fill="var(--ink-4)"
         >
-          / {hard}
+          / {limit}
         </text>
       </svg>
-      <div className="turn-gauge-foot margin-note">软上限 {soft}</div>
+      <div className="turn-gauge-foot margin-note">{t("软上限 {n}", { n: limit })}</div>
     </div>
   );
 }
 
+/* ---------- Dialogue message ---------- */
+
+const DialogueMessage = memo(function DialogueMessage({
+  bubble,
+  startsGroup,
+  teacherHasAvatar,
+  courseId,
+}: {
+  bubble: ChatBubble;
+  startsGroup: boolean;
+  teacherHasAvatar: boolean;
+  courseId?: string;
+}) {
+  const { t } = useLanguage();
+  if (bubble.role === "user") {
+    return (
+      <div
+        className={`msg msg-user ${startsGroup ? "msg-start" : "msg-grouped"}`}
+        role="listitem"
+        aria-label={t("你的消息")}
+      >
+        <div className="msg-user-body">
+          <div className="msg-bubble msg-bubble-user">
+            <div className="msg-text">{bubble.content}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`msg msg-ai ${startsGroup ? "msg-start" : "msg-grouped"}`}
+      role="listitem"
+      aria-label={t("导师消息")}
+    >
+      <div
+        className={`msg-ai-mark ${startsGroup ? "" : "is-spacer"}`}
+        aria-hidden={!startsGroup}
+      >
+        {teacherHasAvatar && courseId ? (
+          <img
+            className="mark mark-img"
+            src={teacherAvatarUrl(courseId)}
+            alt=""
+          />
+        ) : (
+          <div className="mark">{t("师")}</div>
+        )}
+      </div>
+      <div className="msg-ai-body">
+        {startsGroup && <div className="msg-speaker">{t("导师")}</div>}
+        <div
+          className={`msg-bubble msg-bubble-ai ${bubble.pending ? "msg-bubble-pending" : ""}`}
+        >
+          {bubble.content ? (
+            <div className="msg-text msg-rich">
+              <MarkdownView source={bubble.content} />
+            </div>
+          ) : bubble.pending ? (
+            <span className="msg-pending" aria-live="polite">
+              <svg
+                className="msg-pending-quill"
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                aria-hidden="true"
+              >
+                <g
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4 20 L13 11" />
+                  <path
+                    d="M13 11 L16 4 L20 8 L13 11 Z"
+                    fill="currentColor"
+                  />
+                </g>
+                <circle cx="3.6" cy="20.4" r="0.9" fill="currentColor" />
+              </svg>
+              <span className="msg-pending-text">{t("老师正在备课")}</span>
+              <span className="thinking-dots" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+            </span>
+          ) : (
+            ""
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 /* ---------- KPPage ---------- */
 
 export function KPPage() {
+  const { t } = useLanguage();
   const { courseId, kpId } = useParams<{
     courseId: string;
     kpId: string;
@@ -340,7 +436,7 @@ export function KPPage() {
         if (err instanceof CoursesError || err instanceof ChatError) {
           setMeta({ kind: "error", message: err.message });
         } else {
-          setMeta({ kind: "error", message: "加载失败" });
+          setMeta({ kind: "error", message: t("加载失败") });
         }
       });
     return () => {
@@ -462,7 +558,7 @@ export function KPPage() {
     }
   }
 
-  const aiTurns = messages.filter((m) => m.role === "assistant" && !m.pending)
+  const studentTurns = messages.filter((m) => m.role === "user")
     .length;
 
   const currentLoc =
@@ -473,8 +569,8 @@ export function KPPage() {
   const readOnly = meta.kind === "ready" && isSyntheticKp(meta.kp);
   const readOnlyLabel =
     meta.kind === "ready" && kpKind(meta.kp) === "summary"
-      ? "全书总结"
-      : "全书导读";
+      ? t("全书总结")
+      : t("全书导读");
 
   // Loading state takes the full page — return early so the still-mounted
   // dialogue-center (which is rendered always in the main layout) doesn't
@@ -507,10 +603,10 @@ export function KPPage() {
               <circle cx="7" cy="41" r="1.6" fill="var(--accent)" />
             </svg>
             <div className="serif" style={{ fontSize: 18, color: "var(--ink-0)" }}>
-              翻到新一页…
+              {t("翻到新一页…")}
             </div>
             <div className="margin-note" style={{ fontSize: 12 }}>
-              老师正在准备这一节的内容
+              {t("老师正在准备这一节的内容")}
             </div>
             <div className="loading-skeleton-stack">
               <div className="skeleton-line" style={{ width: "60%" }} />
@@ -537,7 +633,7 @@ export function KPPage() {
                 letterSpacing: "0.1em",
               }}
             >
-              当前位置
+              {t("当前位置")}
             </div>
             <div
               className="serif"
@@ -565,7 +661,7 @@ export function KPPage() {
               className="btn btn-quiet btn-sm"
               onClick={() => navigate(`/courses/${courseId}`)}
             >
-              ← 返回章节树
+              {t("← 返回章节树")}
             </button>
           </div>
         </aside>
@@ -580,7 +676,7 @@ export function KPPage() {
             className="btn btn-quiet btn-sm"
             onClick={() => navigate(`/courses/${courseId}`)}
           >
-            ← 返回章节树
+            {t("← 返回章节树")}
           </button>
           {meta.kind === "ready" && (
             <span className="dialogue-mobile-kp-title">{meta.kp.title}</span>
@@ -590,8 +686,16 @@ export function KPPage() {
           <div>
             <div className="margin-note">
               {meta.kind === "ready"
-                ? `第 ${aiTurns} 轮 · ${meta.kp.status === "passed" ? "已掌握" : meta.kp.status === "in_progress" ? "学习中" : "未开始"}`
-                : "加载中…"}
+                ? t("第 {n} 轮 · {status}", {
+                    n: studentTurns,
+                    status:
+                      meta.kp.status === "passed"
+                        ? t("已掌握")
+                        : meta.kp.status === "in_progress"
+                          ? t("学习中")
+                          : t("未开始"),
+                  })
+                : t("加载中…")}
             </div>
             <h2 style={{ margin: "2px 0 0" }}>
               {meta.kind === "ready" ? meta.kp.title : "…"}
@@ -599,7 +703,7 @@ export function KPPage() {
           </div>
           <div className="dialogue-header-actions">
             {readOnly ? (
-              <span className="margin-note">只读 · {readOnlyLabel} · 仅对话</span>
+              <span className="margin-note">{t("只读 · {label} · 仅对话", { label: readOnlyLabel })}</span>
             ) : (
               <button
                 type="button"
@@ -610,88 +714,24 @@ export function KPPage() {
                   }
                 }}
               >
-                我懂了，做题去 →
+                {t("我懂了，去做题 →")}
               </button>
             )}
           </div>
         </div>
 
         <div className="dialogue-stream" ref={scrollRef}>
-          <div className="dialogue-stream-inner">
+          <div className="dialogue-stream-inner" role="list">
             {messages.map((m, i) => {
-              if (m.role === "user") {
-                return (
-                  <div key={m.key} className="msg msg-user">
-                    <div className="msg-bubble msg-bubble-user">
-                      {m.content}
-                    </div>
-                  </div>
-                );
-              }
-              const isFirst =
-                i === 0 || messages[i - 1].role === "user";
+              const startsGroup = i === 0 || messages[i - 1].role !== m.role;
               return (
-                <div key={m.key} className="msg msg-ai">
-                  {isFirst && (
-                    <div className="msg-ai-mark">
-                      {teacherHasAvatar && courseId ? (
-                        <img
-                          className="mark mark-img"
-                          src={teacherAvatarUrl(courseId)}
-                          alt=""
-                        />
-                      ) : (
-                        <div className="mark">S</div>
-                      )}
-                    </div>
-                  )}
-                  <div className="msg-ai-body">
-                    <div className="msg-bubble msg-bubble-ai">
-                      {m.content ? (
-                        <MarkdownView source={m.content} />
-                      ) : m.pending ? (
-                        <span className="msg-pending">
-                          <svg
-                            className="msg-pending-quill"
-                            viewBox="0 0 24 24"
-                            width="22"
-                            height="22"
-                          >
-                            <g
-                              stroke="currentColor"
-                              strokeWidth="1.5"
-                              fill="none"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M4 20 L13 11" />
-                              <path
-                                d="M13 11 L16 4 L20 8 L13 11 Z"
-                                fill="currentColor"
-                              />
-                            </g>
-                            <circle
-                              cx="3.6"
-                              cy="20.4"
-                              r="0.9"
-                              fill="currentColor"
-                            />
-                          </svg>
-                          <span className="msg-pending-text">
-                            苏格拉底老师正在备课
-                          </span>
-                          <span className="thinking-dots">
-                            <span />
-                            <span />
-                            <span />
-                          </span>
-                        </span>
-                      ) : (
-                        ""
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <DialogueMessage
+                  key={m.key}
+                  bubble={m}
+                  startsGroup={startsGroup}
+                  teacherHasAvatar={teacherHasAvatar}
+                  courseId={courseId}
+                />
               );
             })}
           </div>
@@ -719,7 +759,7 @@ export function KPPage() {
                   onClick={() => retryAction()}
                   disabled={sending}
                 >
-                  重新发送
+                  {t("重新发送")}
                 </button>
               )}
             </div>
@@ -729,7 +769,7 @@ export function KPPage() {
               className="paper-composer-input"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="把你的想法写下来，哪怕只是猜测… (⌘ + ↵ 发送)"
+              placeholder={t("写下你的想法，哪怕只是猜测… (CTRL + ↵ 发送)")}
               onKeyDown={handleKeyDown}
               rows={2}
               disabled={sending}
@@ -737,7 +777,7 @@ export function KPPage() {
             <button
               type="button"
               className="paper-composer-send"
-              aria-label="发送"
+              aria-label={t("发送")}
               disabled={sending || !input.trim()}
               onClick={() => void handleSend()}
             >
@@ -763,8 +803,8 @@ export function KPPage() {
       {meta.kind === "ready" && (
         <aside className="dialogue-right">
           <div className="card right-card">
-            <div className="right-card-title">对话状态</div>
-            <TurnGauge turn={aiTurns} soft={20} hard={30} />
+            <div className="right-card-title">{t("对话状态")}</div>
+            <TurnGauge turn={studentTurns} limit={SOFT_TURN_LIMIT} />
             <div className="right-divider" />
             <div className="right-stats">
               <div>
@@ -772,10 +812,10 @@ export function KPPage() {
                   className="margin-note"
                   style={{ fontSize: 11 }}
                 >
-                  本节预计
+                  {t("本节预计")}
                 </div>
                 <div className="serif" style={{ fontSize: 18 }}>
-                  15 分钟
+                  {t("15 分钟")}
                 </div>
               </div>
               <div>
@@ -783,17 +823,17 @@ export function KPPage() {
                   className="margin-note"
                   style={{ fontSize: 11 }}
                 >
-                  当前轮次
+                  {t("当前轮次")}
                 </div>
                 <div className="serif" style={{ fontSize: 18 }}>
-                  {aiTurns}
+                  {studentTurns}
                 </div>
               </div>
             </div>
           </div>
 
           <div className="card right-card">
-            <div className="right-card-title">如果你 …</div>
+            <div className="right-card-title">{t("如果你 …")}</div>
             <div className="rescue-list">
               <button
                 type="button"
@@ -802,9 +842,9 @@ export function KPPage() {
               >
                 <span className="rescue-glyph">☕</span>
                 <div>
-                  <div>累了，休息一下</div>
+                  <div>{t("累了，休息一下")}</div>
                   <div className="margin-note">
-                    返回章节树，进度已保存
+                    {t("返回章节树，进度已保存")}
                   </div>
                 </div>
               </button>
@@ -819,9 +859,9 @@ export function KPPage() {
                 >
                   <span className="rescue-glyph">⏭</span>
                   <div>
-                    <div>跳过对话，做作业</div>
+                    <div>{t("跳过对话，做作业")}</div>
                     <div className="margin-note">
-                      未通过则进入薄弱点
+                      {t("未通过则进入薄弱点")}
                     </div>
                   </div>
                 </button>
@@ -832,7 +872,7 @@ export function KPPage() {
           {keyphrases.length > 0 && (
             <div className="card right-card">
               <div className="right-card-title">
-                这节课的关键词
+                {t("这节课的关键词")}
               </div>
               <div className="keyphrase-cloud">
                 {keyphrases.map((k) => (

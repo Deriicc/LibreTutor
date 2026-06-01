@@ -11,6 +11,8 @@ import {
   uploadTeacherAvatar,
 } from "../api/teacher";
 import type { TeacherConfig, TestChatMessage } from "../api/teacher";
+import { useLanguage } from "../i18n/LanguageContext";
+import { et } from "../i18n/translations";
 
 const EMPTY_CONFIG: TeacherConfig = {
   scene: "",
@@ -21,10 +23,10 @@ const EMPTY_CONFIG: TeacherConfig = {
 };
 
 const SCENE_PLACEHOLDER = `比如：
-你是一名虚拟家教，名叫"三月七"，清华本一计算机系学生。你住在学校边上的公寓，隔壁是经管系的同年级学生（即学习者）。你活泼可爱，说话带"呢""呀""吧"这种小俏皮，偶尔小声嘀咕（用 *斜体* 表示旁白）。`;
+你是理查德·费曼，加州理工的物理学教授。你最擅长把复杂概念拆成最朴素的大白话，喜欢用第一性原理和生活化的例子来讲解，绝不堆砌术语。你风趣、直率、充满好奇心，常常反问学习者"那你觉得为什么会这样？"来引导他自己想明白。`;
 
 const CONTEXT_PLACEHOLDER = `比如：
-大二经管系学生，对计算机网络零基础，5 月底前要掌握 TCP/IP 协议栈。我喜欢用类比和具体例子来理解抽象概念。`;
+大二物理系学生，对量子力学零基础，5 月底前要掌握薛定谔方程的物理图像。我喜欢用类比和具体例子来理解抽象概念。`;
 
 type TestMsg = {
   key: string;
@@ -45,43 +47,46 @@ function getStatus(args: {
   if (args.saving) {
     return {
       kind: "saving",
-      label: "正在为 TA 写台词…",
-      hint: "约需 10 秒，LLM 正按你写的场景生成 6 段示例对白",
+      label: et("正在为 TA 写台词…"),
+      hint: et("约需 10 秒，LLM 正按你写的场景生成 6 段示例对白"),
     };
   }
   if (args.regenerating) {
     return {
       kind: "regenerating",
-      label: "重新誊写台词…",
-      hint: "保持场景不变，重抽一次示例",
+      label: et("重新誊写台词…"),
+      hint: et("保持场景不变，重抽一次示例"),
     };
   }
   if (args.sceneChanged) {
     return {
       kind: "dirty",
-      label: "角色已改动，未保存",
-      hint: "保存时会自动重新生成台词",
+      label: et("角色已改动，未保存"),
+      hint: et("保存时会自动重新生成台词"),
     };
   }
   if (args.sceneDirty) {
     return {
       kind: "stale",
-      label: "台词稿尚未生成",
-      hint: "点「重新生成台词」让 TA 有戏可演",
+      label: et("台词稿尚未生成"),
+      hint: et("点「重新生成台词」让 TA 有戏可演"),
     };
   }
   if (args.hasFewShots) {
     return {
       kind: "ready",
-      label: "台词稿已就绪",
-      hint: "TA 已经准备好出场了",
+      label: et("台词稿已就绪"),
+      hint: et("TA 已经准备好出场了"),
     };
   }
-  return { kind: "empty", label: "尚未塑造角色", hint: "在左侧写下 TA 的样子" };
+  return { kind: "empty", label: et("尚未塑造角色"), hint: et("在左侧写下 TA 的样子") };
 }
 
 export function TeacherConfigPage() {
+  const { t } = useLanguage();
   const { courseId } = useParams<{ courseId: string }>();
+  const scenePlaceholder = t(SCENE_PLACEHOLDER);
+  const contextPlaceholder = t(CONTEXT_PLACEHOLDER);
   const [config, setConfig] = useState<TeacherConfig>(EMPTY_CONFIG);
   const [origScene, setOrigScene] = useState("");
   const [loading, setLoading] = useState(true);
@@ -118,7 +123,7 @@ export function TeacherConfigPage() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        const m = err instanceof TeacherConfigError ? err.message : "加载失败";
+        const m = err instanceof TeacherConfigError ? err.message : t("加载失败");
         setError(m);
         setLoading(false);
       });
@@ -176,7 +181,7 @@ export function TeacherConfigPage() {
       setOrigScene(out.scene);
       setSavedAt(new Date().toLocaleTimeString());
     } catch (err: unknown) {
-      const m = err instanceof TeacherConfigError ? err.message : "保存失败";
+      const m = err instanceof TeacherConfigError ? err.message : t("保存失败");
       setError(m);
     } finally {
       setSaving(false);
@@ -192,7 +197,7 @@ export function TeacherConfigPage() {
       setConfig(out);
       setAvatarVersion(Date.now());
     } catch (err: unknown) {
-      const m = err instanceof TeacherConfigError ? err.message : "头像上传失败";
+      const m = err instanceof TeacherConfigError ? err.message : t("头像上传失败");
       setError(m);
     } finally {
       setUploadingAvatar(false);
@@ -209,7 +214,7 @@ export function TeacherConfigPage() {
       setOrigScene(out.scene);
       setSavedAt(new Date().toLocaleTimeString());
     } catch (err: unknown) {
-      const m = err instanceof TeacherConfigError ? err.message : "重新生成失败";
+      const m = err instanceof TeacherConfigError ? err.message : t("重新生成失败");
       setError(m);
     } finally {
       setRegenerating(false);
@@ -315,7 +320,7 @@ export function TeacherConfigPage() {
           className="margin-note"
           style={{ textAlign: "center", padding: "60px 0 40px" }}
         >
-          翻开角色卡…
+          {t("翻开角色卡…")}
         </div>
       )}
 
@@ -325,35 +330,34 @@ export function TeacherConfigPage() {
           <div className="casting-back-wrap">
             <Link
               to={courseId ? `/courses/${courseId}` : "/"}
-              className="btn btn-quiet btn-sm"
+              className="btn btn-quiet btn-sm upload-back-link"
             >
-              ← 返回章节树
+              {t("← 返回章节树")}
             </Link>
           </div>
           <header className="casting-head">
             <div className="casting-titleblock">
               <div className="margin-note casting-eyebrow">
-                DIRECTOR&apos;S&nbsp;NOTES · 角色卡
+                {t("DIRECTOR'S NOTES · 角色卡")}
               </div>
-              <h1 className="casting-title">为 TA 写一张角色卡</h1>
+              <h1 className="casting-title">{t("为 TA 写一张角色卡")}</h1>
               <p className="casting-lede">
-                这不是给 AI 的指令，是给一名虚拟家教写的剧本。
-                你描述得越具体——TA 是谁、怎么开口、会摆什么神态——
-                <em>TA 表演得就越像真人</em>。保存后，系统会基于你的描述自动生成 6 段示范对白，
-                作为 TA 出场前的台词彩排。
+                {t("这不是给 AI 的指令，是给一名虚拟家教写的剧本。你描述得越具体——TA 是谁、怎么开口、会摆什么神态——")}
+                <em>{t("TA 表演得就越像真人")}</em>
+                {t("。保存后，系统会基于你的描述自动生成 6 段示范对白，作为 TA 出场前的台词彩排。")}
               </p>
             </div>
             <label
               className={`casting-portrait${
                 config.has_avatar ? " is-filled" : ""
               }${uploadingAvatar ? " is-uploading" : ""}`}
-              title={config.has_avatar ? "点击替换角色头像" : "上传角色头像"}
+              title={config.has_avatar ? t("点击替换角色头像") : t("上传角色头像")}
             >
               {config.has_avatar && courseId && (
                 <img
                   className="casting-portrait-img"
                   src={teacherAvatarUrl(courseId, avatarVersion)}
-                  alt="角色头像"
+                  alt={t("角色头像")}
                 />
               )}
               <span className="casting-portrait-plus" aria-hidden="true">
@@ -381,14 +385,13 @@ export function TeacherConfigPage() {
           <section className="casting-form">
             <article className="casting-section">
               <header className="casting-section-head">
-                <div className="casting-section-num">一</div>
+                <div className="casting-section-num">{t("一")}</div>
                 <div>
                   <h2 className="casting-section-title">
-                    TA 是谁
+                    {t("TA 是谁")}
                   </h2>
                   <div className="margin-note casting-section-sub">
-                    叙事式描写：名字、身份、和你的关系、性格、说话语气、神态举止。
-                    把 TA 当作一个真人，越具体越好。
+                    {t("叙事式描写：名字、身份、和你的关系、性格、说话语气、神态举止。把 TA 当作一个真人，越具体越好。")}
                   </div>
                 </div>
               </header>
@@ -397,7 +400,7 @@ export function TeacherConfigPage() {
                 className="manuscript-input"
                 value={config.scene}
                 onChange={(e) => update("scene", e.target.value)}
-                placeholder={SCENE_PLACEHOLDER}
+                placeholder={scenePlaceholder}
                 rows={14}
                 disabled={saving || regenerating}
               />
@@ -409,12 +412,11 @@ export function TeacherConfigPage() {
 
             <article className="casting-section">
               <header className="casting-section-head">
-                <div className="casting-section-num">二</div>
+                <div className="casting-section-num">{t("二")}</div>
                 <div>
-                  <h2 className="casting-section-title">关于你</h2>
+                  <h2 className="casting-section-title">{t("关于你")}</h2>
                   <div className="margin-note casting-section-sub">
-                    你的背景、学习目标、偏好。TA 会据此调整举例和节奏——
-                    比如告诉 TA「我看到公式就头大，请多用图」。
+                    {t("你的背景、学习目标、偏好。TA 会据此调整举例和节奏——比如告诉 TA「我看到公式就头大，请多用图」。")}
                   </div>
                 </div>
               </header>
@@ -423,7 +425,7 @@ export function TeacherConfigPage() {
                 className="manuscript-input manuscript-input-sm"
                 value={config.learner_context}
                 onChange={(e) => update("learner_context", e.target.value)}
-                placeholder={CONTEXT_PLACEHOLDER}
+                placeholder={contextPlaceholder}
                 rows={6}
                 disabled={saving || regenerating}
               />
@@ -454,7 +456,7 @@ export function TeacherConfigPage() {
                 disabled={saving || regenerating}
                 onClick={() => void handleSave()}
               >
-                {saving ? "正在誊写…" : "保存并生成台词"}
+                {saving ? t("正在誊写…") : t("保存并生成台词")}
               </button>
               <button
                 type="button"
@@ -465,11 +467,11 @@ export function TeacherConfigPage() {
                 onClick={() => void handleRegenerate()}
                 title={
                   sceneChanged
-                    ? "请先保存场景再重新生成"
-                    : "用同一场景重新生成示例对白"
+                    ? t("请先保存场景再重新生成")
+                    : t("用同一场景重新生成示例对白")
                 }
               >
-                {regenerating ? "重写中…" : "↻ 重新生成台词"}
+                {regenerating ? t("重写中…") : t("↻ 重新生成台词")}
               </button>
               <div className="casting-actions-meta">
                 {error && (
@@ -477,15 +479,14 @@ export function TeacherConfigPage() {
                 )}
                 {savedAt && !error && !saving && !regenerating && (
                   <span style={{ color: "var(--sage)" }}>
-                    上次保存 · {savedAt}
+                    {t("上次保存 · {at}", { at: savedAt })}
                   </span>
                 )}
               </div>
             </div>
 
             <p className="casting-footnote margin-note">
-              核心教学规则——苏格拉底引导、循序拆解、错答两步法、抗拒时给 3 选项——
-              由系统固定，不在此页修改。
+              {t("核心教学规则由系统固定，不在此页修改。")}
             </p>
           </section>
 
@@ -494,9 +495,9 @@ export function TeacherConfigPage() {
             <header className="audition-head">
               <div>
                 <div className="margin-note audition-eyebrow">
-                  AUDITION · 试镜
+                  {t("AUDITION · 试镜")}
                 </div>
-                <h3 className="audition-title">和 TA 演一段</h3>
+                <h3 className="audition-title">{t("和 TA 演一段")}</h3>
               </div>
               {testMessages.length > 0 && (
                 <button
@@ -505,7 +506,7 @@ export function TeacherConfigPage() {
                   onClick={resetTest}
                   disabled={testSending}
                 >
-                  落幕
+                  {t("落幕")}
                 </button>
               )}
             </header>
@@ -518,10 +519,10 @@ export function TeacherConfigPage() {
                   <div className="audition-empty-glyph">❧</div>
                   <div className="audition-empty-text serif">
                     {!config.scene.trim()
-                      ? "在左侧写下角色卡，TA 才能上场。"
+                      ? t("在左侧写下角色卡，TA 才能上场。")
                       : sceneChanged
-                        ? "角色刚改过——保存一下，TA 才能就位。"
-                        : "保存后，TA 就准备好上场了。"}
+                        ? t("角色刚改过——保存一下，TA 才能就位。")
+                        : t("保存后，TA 就准备好上场了。")}
                   </div>
                 </div>
               )}
@@ -529,10 +530,10 @@ export function TeacherConfigPage() {
                 <div className="audition-empty">
                   <div className="audition-empty-glyph">❧</div>
                   <div className="audition-empty-text serif">
-                    幕布已升，在下方说一句话试试。
+                    {t("幕布已升，在下方说一句话试试。")}
                   </div>
                   <div className="margin-note audition-empty-hint">
-                    这里聊的不入档，刷新即清空。
+                    {t("这里聊的不入档，刷新即清空。")}
                   </div>
                 </div>
               )}
@@ -556,7 +557,7 @@ export function TeacherConfigPage() {
                           ) : (
                             <span className="msg-pending">
                               <span className="msg-pending-text">
-                                老师在酝酿台词…
+                                {t("老师在酝酿台词…")}
                               </span>
                               <span className="thinking-dots">
                                 <span />
@@ -570,7 +571,7 @@ export function TeacherConfigPage() {
                         ) : m.pending ? (
                           <span className="msg-pending">
                             <span className="msg-pending-text">
-                              老师在酝酿台词…
+                              {t("老师在酝酿台词…")}
                             </span>
                             <span className="thinking-dots">
                               <span />
@@ -596,7 +597,7 @@ export function TeacherConfigPage() {
                 value={testInput}
                 onChange={(e) => setTestInput(e.target.value)}
                 placeholder={
-                  canTest ? "说点什么试试…  (⌘/Ctrl + ↵ 发送)" : "先保存角色卡"
+                  canTest ? t("说点什么试试…  (⌘/Ctrl + ↵ 发送)") : t("先保存角色卡")
                 }
                 onKeyDown={handleTestKeyDown}
                 rows={2}
@@ -605,7 +606,7 @@ export function TeacherConfigPage() {
               <button
                 type="button"
                 className="paper-composer-send"
-                aria-label="发送"
+                aria-label={t("发送")}
                 disabled={!canTest || testSending || !testInput.trim()}
                 onClick={() => void handleTestSend()}
               >

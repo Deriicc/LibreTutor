@@ -37,7 +37,7 @@
   --ochre-wash: #ecdcb4;
 
   /* Type */
-  --serif: 'Newsreader', 'Source Serif 4', Georgia, serif;
+  --serif: 'Newsreader', 'Noto Serif SC', 'Source Serif 4', Georgia, serif;
   --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 
@@ -861,7 +861,7 @@ input, textarea {
   text-decoration: none;
 }
 .tree-row:hover { background: var(--paper-2); }
-.tree-row .indent { width: 12px; flex-shrink: 0; }
+.tree-row .indent { width: 16px; flex-shrink: 0; }
 .tree-row .twirl {
   font-size: 9px;
   color: var(--ink-4);
@@ -889,19 +889,21 @@ input, textarea {
 }
 .tree-row-chapter {
   font-family: var(--serif);
-  font-size: 14px;
+  font-size: 15px;
   color: var(--ink-0);
-  font-weight: 500;
+  font-weight: 600;
   padding-top: 8px;
   padding-bottom: 6px;
 }
 .tree-row-section {
   font-size: 13px;
+  font-weight: 500;
   color: var(--ink-1);
 }
 .tree-row-kp {
+  font-size: 12px;
+  font-weight: 400;
   color: var(--ink-2);
-  padding-left: 8px;
 }
 .tree-row.is-current {
   background: var(--accent-wash);
@@ -1347,7 +1349,7 @@ input, textarea {
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
 }
 
 /* Messages */
@@ -1409,55 +1411,185 @@ input, textarea {
   color: var(--ink-3);
 }
 
+.msg {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+  animation: message-in 0.18s ease-out;
+}
+.msg-grouped {
+  margin-top: -8px;
+}
+@keyframes message-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.msg-speaker {
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--ink-4);
+}
+.msg-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .msg-user {
   display: flex;
   justify-content: flex-end;
+  align-items: flex-start;
+  gap: 10px;
 }
-.msg-bubble-user {
-  background: var(--ink-1);
-  color: var(--paper-0);
-  padding: 12px 16px;
-  border-radius: 14px 14px 4px 14px;
-  max-width: 80%;
-  line-height: 1.55;
-  font-size: 14.5px;
+.msg-user-body {
+  width: fit-content;
+  max-width: min(78%, 620px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+.msg-user .msg-speaker {
+  color: color-mix(in oklab, var(--ink-2), var(--accent) 28%);
 }
 
+.msg-bubble {
+  position: relative;
+  line-height: 1.62;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+.msg-bubble-user {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--accent), #5a1222 18%),
+    #681f2d
+  );
+  color: var(--paper-0);
+  border: 1px solid color-mix(in oklab, var(--accent-soft), #5a1222 44%);
+  padding: 12px 16px;
+  border-radius: 16px 6px 16px 16px;
+  font-size: 14.5px;
+  white-space: pre-wrap;
+  box-shadow: 0 1px 0 rgba(251, 246, 234, 0.16) inset;
+}
+.msg-user > .msg-bubble-user {
+  max-width: min(78%, 620px);
+}
 .msg-ai {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   align-items: flex-start;
 }
 .msg-ai-mark {
+  width: 36px;
   flex-shrink: 0;
-  padding-top: 2px;
+  padding-top: 17px;
+}
+.msg-ai-mark.is-spacer {
+  visibility: hidden;
 }
 .msg-ai-mark .mark {
-  width: 28px; height: 28px;
+  width: 36px;
+  height: 36px;
   background: var(--accent);
   color: var(--paper-0);
-  border-radius: 4px;
-  display: grid; place-items: center;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
   font-family: var(--serif);
   font-style: italic;
+  font-size: 16px;
   font-weight: 600;
+  box-shadow: 0 1px 0 rgba(251, 246, 234, 0.28) inset;
 }
 .msg-ai-mark .mark.mark-img {
   object-fit: cover;
   background: var(--paper-3);
+  border: 1px solid color-mix(in oklab, var(--accent), var(--paper-0) 62%);
 }
-.msg-ai-body { flex: 1; min-width: 0; }
+.msg-ai-body {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
 .msg-bubble-ai {
+  width: fit-content;
+  max-width: min(100%, 680px);
   background: var(--paper-0);
   border: 1px solid var(--paper-3);
-  padding: 14px 18px;
-  border-radius: 4px 14px 14px 14px;
-  line-height: 1.65;
+  padding: 15px 18px;
+  border-radius: 6px 16px 16px 16px;
   color: var(--ink-1);
   font-family: var(--serif);
   font-size: 16px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+}
+.msg-bubble-ai::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 18px;
+  width: 10px;
+  height: 10px;
+  background: var(--paper-0);
+  border-left: 1px solid var(--paper-3);
+  border-bottom: 1px solid var(--paper-3);
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+.msg-bubble-ai:hover {
+  border-color: color-mix(in oklab, var(--paper-4), var(--accent) 24%);
 }
 .msg-bubble-ai strong { color: var(--ink-0); font-weight: 600; }
+.msg-bubble-pending {
+  color: var(--ink-3);
+}
+.msg-rich > :first-child { margin-top: 0; }
+.msg-rich > :last-child { margin-bottom: 0; }
+.msg-rich p {
+  margin: 0 0 0.75em;
+}
+.msg-rich ul,
+.msg-rich ol {
+  margin: 0.35em 0 0.85em 1.15em;
+  padding: 0;
+}
+.msg-rich li + li {
+  margin-top: 0.2em;
+}
+.msg-rich blockquote {
+  margin: 0.85em 0;
+  padding: 0.25em 0.85em;
+  border-left: 1px solid var(--paper-4);
+  color: var(--ink-2);
+  background: color-mix(in oklab, var(--paper-1), var(--paper-0) 44%);
+  border-radius: 0 var(--r-2) var(--r-2) 0;
+}
+.msg-rich code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--paper-2);
+  border: 1px solid var(--paper-3);
+  border-radius: var(--r-2);
+  padding: 0.08em 0.32em;
+}
+.msg-rich pre {
+  margin: 0.85em 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border-radius: var(--r-3);
+  border: 1px solid var(--paper-4);
+  background: var(--paper-2);
+}
+.msg-rich pre code {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  white-space: pre;
+}
 .msg-code {
   background: var(--paper-2);
   border: 1px solid var(--paper-4);
@@ -2460,6 +2592,13 @@ input, textarea {
   font-size: 14px;
   padding: 8px 12px;
 }
+.audition .msg-user > .msg-bubble-user {
+  max-width: 78%;
+}
+.audition .msg-ai-mark {
+  width: 24px;
+  padding-top: 0;
+}
 .audition .msg-ai-mark .mark {
   width: 24px;
   height: 24px;
@@ -2554,6 +2693,7 @@ input, textarea {
   }
   .dialogue-header { padding: 12px 16px; }
   .dialogue-stream { padding: 16px; }
+  .dialogue-stream-inner { gap: 18px; }
   .dialogue-composer { padding: 12px 16px 16px; }
 
   /* Report */
@@ -2602,8 +2742,13 @@ input, textarea {
   .course-title { font-size: 15px; }
 
   /* Dialogue bubbles */
-  .msg-bubble-user { max-width: 90%; font-size: 14px; padding: 10px 14px; }
-  .msg-bubble-ai { font-size: 15px; padding: 12px 14px; }
+  .msg-user { gap: 8px; }
+  .msg-user-body { max-width: 90%; }
+  .msg-ai { gap: 10px; }
+  .msg-ai-mark { width: 32px; padding-top: 16px; }
+  .msg-ai-mark .mark { width: 32px; height: 32px; border-radius: 9px; font-size: 14px; }
+  .msg-bubble-user { font-size: 14px; padding: 10px 14px; }
+  .msg-bubble-ai { max-width: 100%; font-size: 15px; padding: 12px 14px; }
   .composer-input { font-size: 16px; /* prevents iOS zoom */ }
 
   /* Paper composer */
@@ -2617,6 +2762,16 @@ input, textarea {
   /* Inputs prevent iOS zoom */
   .input { font-size: 16px; padding: 12px; }
   .manuscript-input { font-size: 16px; padding: 14px; min-height: 200px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg {
+    animation: none;
+  }
+  .msg-bubble,
+  .paper-composer-send {
+    transition: none;
+  }
 }
 
 
@@ -2863,6 +3018,9 @@ input, textarea {
 }
 .upload-drop.is-filled .upload-drop-icon {
   color: #557a4b;
+}
+.upload-back-link {
+  text-decoration: none;
 }
 
 /* --- 4. Paper-style composer (shared by KPPage + TeacherConfigPage) --- */

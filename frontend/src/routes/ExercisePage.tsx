@@ -15,8 +15,10 @@ import type {
   PerQuestionGrade,
   SubmissionResult,
 } from "../api/kp";
+import { useLanguage } from "../i18n/LanguageContext";
 
 function ExerciseLoadingCard() {
+  const { t } = useLanguage();
   const [stage, setStage] = useState(0);
   const stages = [
     { glyph: "📖", text: "翻看课本…" },
@@ -81,11 +83,11 @@ function ExerciseLoadingCard() {
         <div className="exercise-loading-stage">
           <span className="exercise-loading-glyph">{stages[stage].glyph}</span>
           <span className="serif" style={{ fontSize: 17 }}>
-            {stages[stage].text}
+            {t(stages[stage].text)}
           </span>
         </div>
         <div className="margin-note" style={{ fontSize: 12 }}>
-          首次约 10–20 秒
+          {t("首次约 10–20 秒")}
         </div>
         <div className="exercise-loading-bar">
           <div className="exercise-loading-bar-fill" />
@@ -163,6 +165,7 @@ function ExerciseCard({
   grade?: PerQuestionGrade;
   showCorrect?: boolean;
 }) {
+  const { t } = useLanguage();
   const isMcq = exercise.type === "mcq";
   const correctAnswer = exercise.correct_answer;
 
@@ -178,15 +181,15 @@ function ExerciseCard({
               className={`pill ${grade.score >= 80 ? "pill-sage" : grade.score >= 60 ? "pill-ochre" : "pill-accent"}`}
             >
               {grade.score >= 80
-                ? "✓ 答对"
+                ? t("✓ 答对")
                 : grade.score >= 60
-                  ? "△ 待加强"
-                  : "✗ 答错"}
+                  ? t("△ 待加强")
+                  : t("✗ 答错")}
               {` · ${grade.score}/100`}
             </span>
           )}
           <span className="pill">
-            {exercise.type === "mcq" ? "选择题" : "简答题"} ·{" "}
+            {exercise.type === "mcq" ? t("选择题") : t("简答题")} ·{" "}
             {exercise.question_type}
           </span>
         </div>
@@ -229,7 +232,7 @@ function ExerciseCard({
 
       {grade && (
         <div className="exercise-feedback">
-          <div className="exercise-feedback-mark">老师评语</div>
+          <div className="exercise-feedback-mark">{t("老师评语")}</div>
           <MarkdownView source={grade.feedback} />
         </div>
       )}
@@ -245,7 +248,7 @@ function ExerciseCard({
             color: "var(--sage)",
           }}
         >
-          <strong>参考答案：</strong>
+          <strong>{t("参考答案：")}</strong>
           {correctAnswer}
         </div>
       )}
@@ -254,6 +257,7 @@ function ExerciseCard({
 }
 
 export function ExercisePage() {
+  const { t } = useLanguage();
   const { courseId, kpId } = useParams<{
     courseId: string;
     kpId: string;
@@ -283,7 +287,7 @@ export function ExercisePage() {
         setState({ kind: "answering", content, answers: initialAnswers });
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof KPError ? err.message : "加载失败";
+        const message = err instanceof KPError ? err.message : t("加载失败");
         setState({ kind: "error", message });
       }
     }
@@ -325,7 +329,7 @@ export function ExercisePage() {
       });
       schedulePoll(meta.id);
     } catch (err: unknown) {
-      const message = err instanceof KPError ? err.message : "提交失败";
+      const message = err instanceof KPError ? err.message : t("提交失败");
       setState({ kind: "error", message });
     }
   }
@@ -349,7 +353,7 @@ export function ExercisePage() {
         return;
       }
       if (result.submission.status === "failed") {
-        const failMessage = result.submission.error ?? "评分失败";
+        const failMessage = result.submission.error ?? t("评分失败");
         setState((s) =>
           s.kind === "grading"
             ? {
@@ -365,7 +369,7 @@ export function ExercisePage() {
       }
       schedulePoll(submissionId);
     } catch (err: unknown) {
-      const message = err instanceof KPError ? err.message : "查询批改状态失败";
+      const message = err instanceof KPError ? err.message : t("查询批改状态失败");
       setState({ kind: "error", message });
     }
   }
@@ -382,7 +386,7 @@ export function ExercisePage() {
       });
       schedulePoll(state.submissionId);
     } catch (err: unknown) {
-      const message = err instanceof KPError ? err.message : "重新批改失败";
+      const message = err instanceof KPError ? err.message : t("重新批改失败");
       setState({ kind: "error", message });
     }
   }
@@ -425,10 +429,10 @@ export function ExercisePage() {
           className="btn btn-quiet btn-sm"
           onClick={() => navigate(`/courses/${courseId}/kp/${kpId}`)}
         >
-          ← 回到对话
+          {t("← 回到对话")}
         </button>
       </div>
-      <h1 style={{ margin: "4px 0 4px" }}>作业</h1>
+      <h1 style={{ margin: "4px 0 4px" }}>{t("作业")}</h1>
       <div className="margin-note" style={{ marginBottom: 28 }}>
         {hasContent
           ? (() => {
@@ -436,11 +440,11 @@ export function ExercisePage() {
               const mcq = exs.filter((e) => e.type === "mcq").length;
               const short = exs.filter((e) => e.type === "short_answer").length;
               const parts: string[] = [];
-              if (mcq) parts.push(`${mcq} 道选择`);
-              if (short) parts.push(`${short} 道简答`);
-              return `${exs.length} 道题 · ${parts.join(" + ")}`;
+              if (mcq) parts.push(t("{n} 道选择", { n: mcq }));
+              if (short) parts.push(t("{n} 道简答", { n: short }));
+              return t("{total} 道题 · {parts}", { total: exs.length, parts: parts.join(" + ") });
             })()
-          : "加载题目中…"}
+          : t("加载题目中…")}
       </div>
 
       {state.kind === "loading" && <ExerciseLoadingCard />}
@@ -465,10 +469,10 @@ export function ExercisePage() {
                 <span className="upload-spinner big" />
                 <div>
                   <div className="serif" style={{ fontSize: 18 }}>
-                    AI 老师正在批阅…
+                    {t("AI 老师正在批阅…")}
                   </div>
                   <div className="margin-note">
-                    异步进行 · 每 {POLL_INTERVAL_MS / 1000} 秒自动刷新
+                    {t("异步进行 · 每 {n} 秒自动刷新", { n: POLL_INTERVAL_MS / 1000 })}
                   </div>
                 </div>
               </div>
@@ -482,9 +486,9 @@ export function ExercisePage() {
                 />
               </div>
               <div className="grading-stages">
-                <div className="grading-stage done">① MCQ 比对</div>
-                <div className="grading-stage active">② 简答 LLM 评分</div>
-                <div className="grading-stage">③ 综合判定</div>
+                <div className="grading-stage done">{t("① MCQ 比对")}</div>
+                <div className="grading-stage active">{t("② 简答 LLM 评分")}</div>
+                <div className="grading-stage">{t("③ 综合判定")}</div>
               </div>
             </div>
           )}
@@ -496,7 +500,7 @@ export function ExercisePage() {
                 className="serif"
                 style={{ fontSize: 18, color: "var(--accent)" }}
               >
-                批阅失败
+                {t("批阅失败")}
               </div>
               <div
                 className="margin-note"
@@ -509,7 +513,7 @@ export function ExercisePage() {
                 className="btn btn-accent"
                 onClick={() => void handleRegrade()}
               >
-                重新批改
+                {t("重新批改")}
               </button>
             </div>
           )}
@@ -528,7 +532,7 @@ export function ExercisePage() {
                   className="serif"
                   style={{ fontSize: 20, color: "var(--ink-0)" }}
                 >
-                  {state.result.suggestion ?? "已提交"}
+                  {state.result.suggestion ?? t("已提交")}
                 </div>
                 <div
                   className="margin-note"
@@ -550,14 +554,14 @@ export function ExercisePage() {
                         setReloadKey((k) => k + 1);
                       } catch (err: unknown) {
                         const m =
-                          err instanceof KPError ? err.message : "操作失败";
+                          err instanceof KPError ? err.message : t("操作失败");
                         setState({ kind: "error", message: m });
                       } finally {
                         setAdvancing(false);
                       }
                     }}
                   >
-                    重做一组（生成新题）
+                    {t("重做一组（生成新题）")}
                   </button>
                   <button
                     type="button"
@@ -571,14 +575,14 @@ export function ExercisePage() {
                         navigate(`/courses/${courseId}`);
                       } catch (err: unknown) {
                         const m =
-                          err instanceof KPError ? err.message : "操作失败";
+                          err instanceof KPError ? err.message : t("操作失败");
                         setState({ kind: "error", message: m });
                       } finally {
                         setAdvancing(false);
                       }
                     }}
                   >
-                    下一个 KP →
+                    {t("下一个 KP →")}
                   </button>
                 </div>
               </div>
@@ -611,7 +615,7 @@ export function ExercisePage() {
           {state.kind === "answering" && (
             <div className="exercise-submit-bar">
               <div className="margin-note">
-                已作答{" "}
+                {t("已作答")}{" "}
                 <span className="mono tnum" style={{ color: "var(--ink-1)" }}>
                   {answeredCount}
                 </span>{" "}
@@ -623,7 +627,7 @@ export function ExercisePage() {
                 onClick={() => void handleSubmit()}
                 disabled={!allAnswered}
               >
-                提交作业
+                {t("提交作业")}
               </button>
             </div>
           )}

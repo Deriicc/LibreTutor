@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CoursesError, deleteCourse, listCourses } from "../api/courses";
 import type { Course } from "../api/courses";
+import { useLanguage } from "../i18n/LanguageContext";
 
 type ListState =
   | { kind: "loading" }
@@ -28,6 +29,7 @@ function formatStatus(status: Course["generation_status"]): string {
 }
 
 export function HomePage() {
+  const { t } = useLanguage();
   const [list, setList] = useState<ListState>({ kind: "loading" });
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -39,7 +41,7 @@ export function HomePage() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        const message = err instanceof CoursesError ? err.message : "加载失败";
+        const message = err instanceof CoursesError ? err.message : t("加载失败");
         setList({ kind: "error", message });
       });
     return () => {
@@ -48,7 +50,7 @@ export function HomePage() {
   }, []);
 
   async function handleDelete(course: Course) {
-    if (!window.confirm(`确定删除「${course.name}」？此操作不可恢复。`)) return;
+    if (!window.confirm(t("确定删除「{name}」？此操作不可恢复。", { name: course.name }))) return;
     setDeletingId(course.id);
     try {
       await deleteCourse(course.id);
@@ -58,7 +60,7 @@ export function HomePage() {
           : prev,
       );
     } catch (err) {
-      const message = err instanceof CoursesError ? err.message : "删除失败";
+      const message = err instanceof CoursesError ? err.message : t("删除失败");
       window.alert(message);
     } finally {
       setDeletingId(null);
@@ -72,7 +74,7 @@ export function HomePage() {
     >
       <div style={{ marginBottom: 16 }}>
         <div className="margin-note" style={{ marginBottom: 4 }}>
-          欢迎回来,同学
+          {t("欢迎回来")}
         </div>
         <div
           style={{
@@ -82,12 +84,12 @@ export function HomePage() {
             gap: 24,
           }}
         >
-          <h1 style={{ margin: 0 }}>我的书房</h1>
+          <h1 style={{ margin: 0 }}>{t("我的课程")}</h1>
           <Link
             to="/courses/new"
             className="btn-add"
-            title="新建一门课"
-            aria-label="新建一门课"
+            title={t("新建一门课")}
+            aria-label={t("新建一门课")}
           >
             +
           </Link>
@@ -118,12 +120,12 @@ export function HomePage() {
           <Link to="/courses/new" className="course-card course-card-add">
             <div className="add-plus">+</div>
             <div className="serif" style={{ fontSize: 17 }}>
-              上传一份新资料
+              {t("上传一份新资料")}
             </div>
             <div className="margin-note" style={{ textAlign: "center" }}>
-              PDF · 支持目录解析
+              {t("PDF · 支持目录解析")}
               <br />
-              约 5 ~ 8 分钟生成章节树
+              {t("生成章节树")}
             </div>
           </Link>
         </div>
@@ -159,7 +161,7 @@ export function HomePage() {
                   <div className="course-body">
                     <div className="course-title">{c.name}</div>
                     <div className="course-sub">
-                      {formatStatus(c.generation_status)} ·{" "}
+                      {t(formatStatus(c.generation_status))} ·{" "}
                       {new Date(c.created_at).toLocaleDateString()}
                     </div>
                     <div className="course-meta">
@@ -178,21 +180,21 @@ export function HomePage() {
                       {isDone ? (
                         <div>
                           <span className="mono tnum">{c.kp_passed}</span>
-                          <span className="ink-4">/{c.kp_total} 个知识点</span>
-                          <span className="ink-4">已掌握</span>
+                          <span className="ink-4">/{c.kp_total} {t("个知识点")}</span>
+                          <span className="ink-4">{t("已掌握")}</span>
                         </div>
                       ) : (
                         <>
                           <div>
                             <span className="mono tnum">{c.progress_done}</span>
-                            <span className="ink-4">/{c.progress_total} 节</span>
+                            <span className="ink-4">/{c.progress_total} {t("节")}</span>
                           </div>
                           <div className="ink-4">
                             {c.generation_status === "running"
-                              ? "生成中…"
+                              ? t("生成中…")
                               : c.generation_status === "failed"
-                                ? "生成失败"
-                                : "等待中"}
+                                ? t("生成失败")
+                                : t("等待中")}
                           </div>
                         </>
                       )}
@@ -211,7 +213,7 @@ export function HomePage() {
                     opacity: 0.7,
                   }}
                 >
-                  {deletingId === c.id ? "删除中…" : "删除"}
+                  {deletingId === c.id ? t("删除中…") : t("删除")}
                 </button>
               </div>
             );
@@ -219,12 +221,12 @@ export function HomePage() {
           <Link to="/courses/new" className="course-card course-card-add">
             <div className="add-plus">+</div>
             <div className="serif" style={{ fontSize: 17 }}>
-              上传一份新资料
+              {t("上传一份新资料")}
             </div>
             <div className="margin-note" style={{ textAlign: "center" }}>
-              PDF · 支持目录解析
+              {t("PDF · 支持目录解析")}
               <br />
-              约 5 ~ 8 分钟生成章节树
+              {t("生成章节树")}
             </div>
           </Link>
         </div>

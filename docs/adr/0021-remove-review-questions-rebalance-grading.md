@@ -56,6 +56,10 @@ API 重塑：
 
 ### 3. 评分加权
 
+> **Update（已撤销，开源版）**：本节的"简答题加权 2 倍"规则已移除，`overall_score`
+> 改回**每题等权的算术平均**（`round(Σ score / n)`）。`_GRADE_WEIGHTS` 常量随之删除。
+> 下文保留原始决策记录。
+
 `Grade.overall_score` 改为加权平均：
 
 ```

@@ -432,10 +432,9 @@ async def test_grade_submission_full_state_machine_and_failure_path(monkeypatch)
             assert scores[2] == 100   # MCQ correct, deterministic
             assert scores[3] == 70    # short — LLM score kept
             assert scores[4] == 70
-            # Weighted: MCQ weight=1, short_answer weight=2.
-            # (100+0+100)*1 + (70+70)*2 = 200 + 280 = 480; sum_w = 3 + 4 = 7
-            # → 480 / 7 ≈ 68.57 → round to 69
-            assert grade.overall_score == 69
+            # Equal share per question (no per-type weighting):
+            # (100+0+100+70+70) / 5 = 340 / 5 = 68
+            assert grade.overall_score == 68
             assert grade.overall_feedback == "整体不错"
 
         # --- FAILURE PATH ---

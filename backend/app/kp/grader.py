@@ -43,14 +43,6 @@ GRADING_SYSTEM_PROMPTS = {
 }
 
 
-# Per-type weights for the overall_score average. MCQ is deterministic
-# 0/100, so a single MCQ slip can swing the unweighted mean by 20 points
-# in a 5-question set — disproportionate to its informational value.
-# Short-answer scores are continuous (0-100) and carry richer evidence
-# of mastery, so we weight them double.
-_GRADE_WEIGHTS: dict[str, int] = {"mcq": 1, "short_answer": 2}
-
-
 # ---------- LLM IO schema ----------
 
 
@@ -261,14 +253,12 @@ async def grade_submission(submission_id: uuid.UUID) -> None:
                 exercises, answers_by_index, llm_grade.per_question,
                 lang_of(api_settings),
             )
-            weighted_sum = sum(
-                q["score"] * _GRADE_WEIGHTS.get(ex["type"], 1)
-                for q, ex in zip(per_question, exercises)
+            # Every question carries an equal fixed share (1/n) — no per-type
+            # weighting; the overall score is the plain mean of the per-
+            # question scores.
+            overall_score = round(
+                sum(q["score"] for q in per_question) / len(per_question)
             )
-            weight_total = sum(
-                _GRADE_WEIGHTS.get(ex["type"], 1) for ex in exercises
-            )
-            overall_score = round(weighted_sum / weight_total)
 
             grade = Grade(
                 submission_id=submission_id,

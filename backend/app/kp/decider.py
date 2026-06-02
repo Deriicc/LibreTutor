@@ -58,6 +58,23 @@ def suggestion_for_score(overall_score: int, lang: str = "zh") -> str:
     return table[key].format(score=overall_score)
 
 
+_WEAKNESS_DESC = {
+    "grading": {
+        "zh": "评分低于阈值（{score}/100）",
+        "en": "Score below threshold ({score}/100)",
+    },
+    "skipped": {
+        "zh": "用户跳过未掌握的知识点（{score}/100）",
+        "en": "Skipped a knowledge point that wasn't mastered ({score}/100)",
+    },
+}
+
+
+def weakness_description(kind: str, score: int, lang: str = "zh") -> str:
+    table = _WEAKNESS_DESC[kind]
+    return table.get(lang, table["zh"]).format(score=score)
+
+
 async def upsert_weakness(
     db: AsyncSession,
     *,
@@ -96,6 +113,7 @@ async def record_grading_weakness_if_low(
     *,
     kp_id: uuid.UUID,
     overall_score: int,
+    lang: str = "zh",
 ) -> None:
     """Called by grader on submission completion. Upserts a grading
     weakness when the score is below threshold."""
@@ -117,7 +135,7 @@ async def record_grading_weakness_if_low(
         course_id=course_id,
         kp_id=kp_id,
         source=WeaknessSource.grading,
-        description=f"评分低于阈值（{overall_score}/100）",
+        description=weakness_description("grading", overall_score, lang),
     )
 
 

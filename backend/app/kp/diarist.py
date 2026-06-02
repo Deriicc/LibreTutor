@@ -71,6 +71,85 @@ _DIARY_SECTIONS = {
     },
 }
 
+# Per-language fragments for the concrete material fed into the user
+# message. With an English system prompt but a Chinese-saturated body the
+# model mirrors the body and writes Chinese, so the body must be localized
+# too. Concept/summary/feedback strings interpolated below come from the
+# assessor/grader and are already in the content language.
+_HISTORY_ROLES = {
+    "zh": {"user": "学生", "assistant": "老师"},
+    "en": {"user": "Student", "assistant": "Teacher"},
+}
+
+_PRIOR_L10N = {
+    "zh": {
+        "first": "（这是这本日记的第一篇。）",
+        "header": "——【{when}·{label} 笔】——",
+        "unsigned": "（未署名）",
+    },
+    "en": {
+        "first": "(This is the first entry in this diary.)",
+        "header": "—— [{when} · by {label}] ——",
+        "unsigned": "(unsigned)",
+    },
+}
+
+_UNKNOWN_KP = {"zh": "（未知知识点）", "en": "(unknown knowledge point)"}
+
+_FACTS_L10N = {
+    "zh": {
+        "kp": "知识点：{kp_title}",
+        "attempt": "这是第 {attempt} 次教这一节",
+        "redo": "（学生重做过）",
+        "first": "（第一次）",
+        "ended_head": "这节怎么结束的：",
+        "ended_next": "学生选择继续下一节",
+        "ended_retry": "学生选择重做这一节",
+        "passed": "，且这一节已判定通过",
+        "not_passed": "，尚未通过/低分跳过",
+        "coverage": "对话覆盖评估：已掌握[{covered}]；部分[{partial}]；"
+        "未触及[{untouched}]；覆盖度 {pct:.0%}",
+        "none": "无",
+        "summary": "评估小结：{summary}",
+        "no_assess": "（这一节学生没有做评估/作业就走了）",
+        "grade": "作业总分 {score}/100。逐题：{per_q}。老师评语：{feedback}",
+        "per_q": "第{n}题 {score}分",
+        "per_q_join": "；",
+        "weak": "这个学生在本节累计的薄弱点：{wl}",
+        "weak_join": "；",
+        "concept_join": "、",
+        "progress": "整体进度：已通过 {kp_passed}/{kp_total} 个知识点，"
+        "{ch_passed}/{ch_total} 章，累计学习约 {minutes} 分钟",
+    },
+    "en": {
+        "kp": "Knowledge point: {kp_title}",
+        "attempt": "Teaching this section for time #{attempt}",
+        "redo": " (the student redid it)",
+        "first": " (first time)",
+        "ended_head": "How it ended: ",
+        "ended_next": "the student chose to continue to the next section",
+        "ended_retry": "the student chose to redo this section",
+        "passed": ", and this section was judged passed",
+        "not_passed": ", not yet passed / skipped with a low score",
+        "coverage": "Dialogue coverage: mastered[{covered}]; partial[{partial}]; "
+        "untouched[{untouched}]; coverage {pct:.0%}",
+        "none": "none",
+        "summary": "Assessment summary: {summary}",
+        "no_assess": "(the student left this section without doing the "
+        "assessment/exercises)",
+        "grade": "Exercise total {score}/100. Per question: {per_q}. "
+        "Teacher's comment: {feedback}",
+        "per_q": "Q{n} {score}",
+        "per_q_join": "; ",
+        "weak": "Weak spots accumulated this section: {wl}",
+        "weak_join": "; ",
+        "concept_join": ", ",
+        "progress": "Overall progress: {kp_passed}/{kp_total} knowledge points "
+        "passed, {ch_passed}/{ch_total} chapters, about {minutes} minutes "
+        "studied in total",
+    },
+}
+
 
 # ---------- LLM IO schema ----------
 
@@ -84,22 +163,24 @@ class _DiaryPayload(BaseModel):
 # ---------- pure render helpers ----------
 
 
-def render_history_block(messages: list[Message]) -> str:
+def render_history_block(messages: list[Message], lang: str = "zh") -> str:
+    roles = _HISTORY_ROLES.get(lang, _HISTORY_ROLES["zh"])
     lines: list[str] = []
     for m in messages:
-        who = "学生" if m.role == MessageRole.user else "老师"
+        who = roles["user"] if m.role == MessageRole.user else roles["assistant"]
         lines.append(f"[{who}] {m.content}")
     return "\n".join(lines)
 
 
 def render_prior_diary_block(
-    entries: list[TeacherDiaryEntry], *, char_budget: int
+    entries: list[TeacherDiaryEntry], *, char_budget: int, lang: str = "zh"
 ) -> str:
     """Whole-book memory, newest-first until the char budget is hit, then
     re-ordered chronologically for the prompt. Oldest entries drop first
     so correctness never depends on the context window size."""
+    pl = _PRIOR_L10N.get(lang, _PRIOR_L10N["zh"])
     if not entries:
-        return "（这是这本日记的第一篇。）"
+        return pl["first"]
 
     chosen: list[TeacherDiaryEntry] = []
     used = 0
@@ -114,10 +195,9 @@ def render_prior_diary_block(
     blocks: list[str] = []
     for e in chosen:
         when = e.created_at.strftime("%Y-%m-%d") if e.created_at else "?"
-        label = e.author_label or "（未署名）"
-        blocks.append(
-            f"——【{when}·{label} 笔】——\n{e.body or ''}\n{e.author_signature or ''}"
-        )
+        label = e.author_label or pl["unsigned"]
+        header = pl["header"].format(when=when, label=label)
+        blocks.append(f"{header}\n{e.body or ''}\n{e.author_signature or ''}")
     return "\n\n".join(blocks)
 
 
@@ -131,54 +211,60 @@ def render_facts_block(
     grades: list[Grade],
     weaknesses: list[Weakness],
     progress: dict[str, Any],
+    lang: str = "zh",
 ) -> str:
+    L = _FACTS_L10N.get(lang, _FACTS_L10N["zh"])
     lines: list[str] = [
-        f"知识点：{kp_title}",
-        f"这是第 {attempt} 次教这一节"
-        + ("（学生重做过）" if attempt > 1 else "（第一次）"),
-        "这节怎么结束的："
-        + (
-            "学生选择继续下一节"
-            if ended_by == "next"
-            else "学生选择重做这一节"
-        )
-        + ("，且这一节已判定通过" if kp_passed else "，尚未通过/低分跳过"),
+        L["kp"].format(kp_title=kp_title),
+        L["attempt"].format(attempt=attempt)
+        + (L["redo"] if attempt > 1 else L["first"]),
+        L["ended_head"]
+        + (L["ended_next"] if ended_by == "next" else L["ended_retry"])
+        + (L["passed"] if kp_passed else L["not_passed"]),
     ]
     if assessment is not None:
-        covered = "、".join(c.get("concept", "") for c in (assessment.covered or []))
-        partial = "、".join(p.get("concept", "") for p in (assessment.partial or []))
-        untouched = "、".join(
+        cj = L["concept_join"]
+        covered = cj.join(c.get("concept", "") for c in (assessment.covered or []))
+        partial = cj.join(p.get("concept", "") for p in (assessment.partial or []))
+        untouched = cj.join(
             u.get("concept", "") for u in (assessment.untouched or [])
         )
         lines.append(
-            f"对话覆盖评估：已掌握[{covered or '无'}]；"
-            f"部分[{partial or '无'}]；未触及[{untouched or '无'}]；"
-            f"覆盖度 {float(assessment.coverage_ratio):.0%}"
+            L["coverage"].format(
+                covered=covered or L["none"],
+                partial=partial or L["none"],
+                untouched=untouched or L["none"],
+                pct=float(assessment.coverage_ratio),
+            )
         )
         if assessment.mastery_summary:
-            lines.append(f"评估小结：{assessment.mastery_summary}")
+            lines.append(L["summary"].format(summary=assessment.mastery_summary))
     else:
-        lines.append("（这一节学生没有做评估/作业就走了）")
+        lines.append(L["no_assess"])
 
     if grades:
         for g in grades:
-            per_q = "；".join(
-                f"第{q.get('index', 0) + 1}题 {q.get('score', 0)}分"
+            per_q = L["per_q_join"].join(
+                L["per_q"].format(n=q.get("index", 0) + 1, score=q.get("score", 0))
                 for q in (g.per_question or [])
             )
             lines.append(
-                f"作业总分 {g.overall_score}/100。逐题：{per_q}。"
-                f"老师评语：{g.overall_feedback}"
+                L["grade"].format(
+                    score=g.overall_score, per_q=per_q, feedback=g.overall_feedback
+                )
             )
     if weaknesses:
-        wl = "；".join(w.description for w in weaknesses)
-        lines.append(f"这个学生在本节累计的薄弱点：{wl}")
+        wl = L["weak_join"].join(w.description for w in weaknesses)
+        lines.append(L["weak"].format(wl=wl))
 
     lines.append(
-        f"整体进度：已通过 {progress.get('kp_passed', 0)}/"
-        f"{progress.get('kp_total', 0)} 个知识点，"
-        f"{progress.get('chapter_passed', 0)}/{progress.get('chapter_total', 0)} 章，"
-        f"累计学习约 {progress.get('study_minutes', 0)} 分钟"
+        L["progress"].format(
+            kp_passed=progress.get("kp_passed", 0),
+            kp_total=progress.get("kp_total", 0),
+            ch_passed=progress.get("chapter_passed", 0),
+            ch_total=progress.get("chapter_total", 0),
+            minutes=progress.get("study_minutes", 0),
+        )
     )
     return "\n".join(lines)
 
@@ -227,7 +313,7 @@ async def _gather_inputs(
     lang: str = "zh",
 ) -> dict[str, Any]:
     kp = await db.get(KnowledgePoint, kp_id)
-    kp_title = kp.title if kp is not None else "（未知知识点）"
+    kp_title = kp.title if kp is not None else _UNKNOWN_KP.get(lang, _UNKNOWN_KP["zh"])
     kp_passed = kp is not None and kp.status == KPStatus.passed
 
     msgs = (
@@ -353,11 +439,13 @@ async def generate_diary_entry(
                     grades=inputs["grades"],
                     weaknesses=inputs["weaknesses"],
                     progress=inputs["progress"],
+                    lang=lang,
                 ),
-                history_block=render_history_block(inputs["messages"]),
+                history_block=render_history_block(inputs["messages"], lang),
                 prior_diary_block=render_prior_diary_block(
                     inputs["prior"],
                     char_budget=settings.diary_context_char_budget,
+                    lang=lang,
                 ),
                 lang=lang,
             )

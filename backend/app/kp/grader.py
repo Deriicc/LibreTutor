@@ -288,6 +288,7 @@ async def grade_submission(submission_id: uuid.UUID) -> None:
                 db,
                 kp_id=submission.kp_id,
                 overall_score=overall_score,
+                lang=lang_of(api_settings),
             )
 
             submission.status = SubmissionStatus.done

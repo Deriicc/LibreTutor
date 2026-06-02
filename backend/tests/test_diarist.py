@@ -108,6 +108,43 @@ def test_render_facts_block_surfaces_real_facts():
     assert "3/10" in block and "42 分钟" in block
 
 
+def test_render_helpers_localized_to_english():
+    block = diarist.render_facts_block(
+        kp_title="Derivatives",
+        attempt=2,
+        ended_by="retry",
+        kp_passed=False,
+        assessment=None,
+        grades=[],
+        weaknesses=[],
+        progress={
+            "kp_passed": 3,
+            "kp_total": 10,
+            "chapter_passed": 1,
+            "chapter_total": 4,
+            "study_minutes": 42,
+        },
+        lang="en",
+    )
+    assert "Knowledge point: Derivatives" in block
+    assert "Teaching this section for time #2" in block
+    assert "redid it" in block
+    assert "3/10 knowledge points" in block and "42 minutes" in block
+    # no Chinese leaked into the English body
+    assert not any("一" <= ch <= "鿿" for ch in block)
+
+    from app.models import Message, MessageRole
+
+    hist = diarist.render_history_block(
+        [Message(kp_id=uuid.uuid4(), role=MessageRole.user, content="hello")],
+        "en",
+    )
+    assert "[Student] hello" in hist
+    assert diarist.render_prior_diary_block([], char_budget=1000, lang="en") == (
+        "(This is the first entry in this diary.)"
+    )
+
+
 # ---------- integration: real PG ----------
 
 

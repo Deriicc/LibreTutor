@@ -8,7 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import SessionLocal, get_session
 from app.kp.assessor import run_assessment
-from app.kp.decider import PASS_THRESHOLD, suggestion_for_score, upsert_weakness
+from app.kp.decider import (
+    PASS_THRESHOLD,
+    suggestion_for_score,
+    upsert_weakness,
+    weakness_description,
+)
 from app.lang import lang_of
 from app.kp.diarist import generate_diary_entry
 from app.kp.grader import grade_submission
@@ -530,13 +535,14 @@ async def advance(
     # action == "next"
     last_grade = await _last_done_grade(kp_id, db)
     if last_grade is not None and last_grade.overall_score < PASS_THRESHOLD:
+        lang = lang_of(await load_api_settings(db))
         await upsert_weakness(
             db,
             course_id=course.id,
             kp_id=kp.id,
             source=WeaknessSource.skipped,
-            description=(
-                f"用户跳过未掌握的知识点（{last_grade.overall_score}/100）"
+            description=weakness_description(
+                "skipped", last_grade.overall_score, lang
             ),
         )
     ending_attempt = kp.current_attempt

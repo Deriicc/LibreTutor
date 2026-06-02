@@ -104,21 +104,16 @@ Screenshots are stored under `screenshot/`.
 
 ```mermaid
 flowchart LR
-    A[Upload source] --> B[Parse outline and pages]
-    B --> C[Build course tree]
-    C --> D[Index source chunks]
-    D --> E[Open a lesson]
-    E --> F[Dialogue with tutor]
-    F --> G[Assess coverage]
-    G --> H[Generate exercises]
-    H --> I[Submit answers]
-    I --> J[Grade and record weaknesses]
-    J --> K{Pass?}
-    K -->|Yes| L[Advance to next lesson]
-    K -->|No| M[Retry this lesson]
-    L --> N[Write tutor diary]
-    M --> N
-    N --> E
+    A["Course setup<br/>Upload source, build map, index chunks"]
+    B["Tutor dialogue<br/>Open a lesson and learn with source-grounded guidance"]
+    C["Assessment and practice<br/>Check coverage, generate exercises, grade answers"]
+    D{"Progress loop<br/>Pass?"}
+
+    A --> B --> C --> D
+    D -->|Yes| E["Advance<br/>Write tutor diary"]
+    D -->|No| F["Retry<br/>Write tutor diary"]
+    E --> B
+    F --> B
 ```
 
 ### 1. Course creation

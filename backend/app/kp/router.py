@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import SessionLocal, get_session
 from app.kp.assessor import run_assessment
 from app.kp.decider import PASS_THRESHOLD, suggestion_for_score, upsert_weakness
+from app.lang import lang_of
 from app.kp.diarist import generate_diary_entry
 from app.kp.grader import grade_submission
 from app.kp.loader import get_kp_material
@@ -390,7 +391,9 @@ async def get_submission(
     grade_row = await db.get(Grade, submission_id)
     grade_payload = GradeOut.model_validate(grade_row) if grade_row else None
     suggestion = (
-        suggestion_for_score(grade_row.overall_score)
+        suggestion_for_score(
+            grade_row.overall_score, lang_of(await load_api_settings(db))
+        )
         if grade_row is not None
         else None
     )

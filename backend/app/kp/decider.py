@@ -39,10 +39,23 @@ def aggregate_status(children: list[KPStatus]) -> KPStatus:
     return KPStatus.untouched
 
 
-def suggestion_for_score(overall_score: int) -> str:
-    if overall_score >= PASS_THRESHOLD:
-        return f"已掌握（{overall_score}/100），可进入下一节。"
-    return f"分数偏低（{overall_score}/100），还有薄弱点。建议「再练一道」巩固，或跳过。"
+_SUGGESTION = {
+    "zh": {
+        "pass": "已掌握（{score}/100），可进入下一节。",
+        "low": "分数偏低（{score}/100），还有薄弱点。建议「再练一道」巩固，或跳过。",
+    },
+    "en": {
+        "pass": "Mastered ({score}/100) — you can move on to the next section.",
+        "low": "Score is low ({score}/100); there are still weak spots. "
+        "Try “redo a set” to reinforce, or skip.",
+    },
+}
+
+
+def suggestion_for_score(overall_score: int, lang: str = "zh") -> str:
+    table = _SUGGESTION.get(lang, _SUGGESTION["zh"])
+    key = "pass" if overall_score >= PASS_THRESHOLD else "low"
+    return table[key].format(score=overall_score)
 
 
 async def upsert_weakness(

@@ -62,6 +62,13 @@ def test_suggestion_for_low_score_indicates_weakness():
     assert "薄弱" in msg or "再练" in msg
 
 
+def test_suggestion_localized_to_english():
+    assert "Mastered" in decider.suggestion_for_score(85, "en")
+    assert "low" in decider.suggestion_for_score(50, "en").lower()
+    # unknown language falls back to Chinese
+    assert "已掌握" in decider.suggestion_for_score(85, "fr")
+
+
 # ---------- integration test ----------
 
 

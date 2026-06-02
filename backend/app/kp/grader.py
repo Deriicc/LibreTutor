@@ -149,38 +149,37 @@ async def _call_llm_grade(
     raise ValueError(f"评分 LLM 输出不合规：{last_err}")
 
 
-# Deterministic MCQ comment, used when the LLM's verdict contradicts the
-# answer key (or the LLM omitted the entry). MCQ correctness is decided by
-# the key, so its comment must be decided the same way — otherwise the
-# on-screen comment can argue the opposite of the ✓/✗ the student sees.
+# MCQ comments are built entirely from the answer key, never the LLM's free
+# text. The LLM is unreliable at MCQ prose: it mislabels the correct option
+# (naming "C" when the key is "B" while describing B's content) and
+# hallucinates context. Correctness is deterministic, so the comment is too.
 _MCQ_VERDICT = {
     "zh": {
-        "correct": "回答正确。",
-        "incorrect": "回答错误，正确答案是 {correct}。",
+        "correct": "回答正确，正确答案是 {answer}。",
+        "incorrect": "回答错误，正确答案是 {answer}。",
     },
     "en": {
-        "correct": "Correct.",
-        "incorrect": "Incorrect. The correct answer is {correct}.",
+        "correct": "Correct. The answer is {answer}.",
+        "incorrect": "Incorrect. The correct answer is {answer}.",
     },
 }
 
 
-def _mcq_feedback(
-    llm_grade: _PerQuestionGrade | None,
-    *,
-    is_correct: bool,
-    correct_answer: str,
-    lang: str,
-) -> str:
-    # Keep the LLM's explanation only when its verdict matches the
-    # deterministic one; a score on the wrong side of 50 means it judged
-    # the answer the opposite way, so its prose would contradict the score.
-    if llm_grade is not None and (llm_grade.score >= 50) == is_correct:
-        return llm_grade.feedback
-    table = _MCQ_VERDICT.get(lang, _MCQ_VERDICT["zh"])
-    return table["correct" if is_correct else "incorrect"].format(
-        correct=correct_answer
+def _mcq_feedback(ex: dict[str, Any], *, is_correct: bool, lang: str) -> str:
+    correct = ex["correct_answer"]
+    text = next(
+        (
+            o.get("text", "")
+            for o in (ex.get("options") or [])
+            if o.get("label") == correct
+        ),
+        "",
     )
+    answer = f"{correct}：{text}" if (text and lang != "en") else (
+        f"{correct}: {text}" if text else correct
+    )
+    table = _MCQ_VERDICT.get(lang, _MCQ_VERDICT["zh"])
+    return table["correct" if is_correct else "incorrect"].format(answer=answer)
 
 
 def _override_mcq_scores(
@@ -189,9 +188,9 @@ def _override_mcq_scores(
     llm_per_question: list[_PerQuestionGrade],
     lang: str = "zh",
 ) -> list[dict[str, Any]]:
-    """For MCQ entries, ignore the LLM's score and use deterministic 0/100.
-    The MCQ comment is likewise made consistent with that score (see
-    _mcq_feedback) so a wrong LLM judgment can't contradict the ✓/✗."""
+    """For MCQ entries, ignore the LLM entirely: score 0/100 against the key
+    and build the comment from the key too (see _mcq_feedback). Only
+    short-answer feedback comes from the LLM."""
     by_idx = {p.index: p for p in llm_per_question}
     out: list[dict[str, Any]] = []
     for i, ex in enumerate(exercises):
@@ -200,12 +199,7 @@ def _override_mcq_scores(
             student = (answers_by_index.get(i) or "").strip().upper()
             is_correct = student == ex["correct_answer"]
             score = 100 if is_correct else 0
-            feedback = _mcq_feedback(
-                llm_grade,
-                is_correct=is_correct,
-                correct_answer=ex["correct_answer"],
-                lang=lang,
-            )
+            feedback = _mcq_feedback(ex, is_correct=is_correct, lang=lang)
         else:
             score = llm_grade.score if llm_grade is not None else 0
             feedback = llm_grade.feedback if llm_grade is not None else ""

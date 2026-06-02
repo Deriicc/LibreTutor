@@ -234,20 +234,18 @@ def test_override_mcq_handles_missing_or_empty_answer():
     assert by_idx[4] == 60
 
 
-def test_mcq_feedback_consistent_with_deterministic_verdict():
-    """MCQ comment must never contradict the deterministic ✓/✗: keep the
-    LLM's explanation only when its score agrees with the answer key."""
-    exs = _fixture_exercises()
-    # q0 correct (A), q1 correct (B), q2 wrong ("X" vs C)
-    answers = {0: "A", 1: "B", 2: "X", 3: "ans", 4: "ans"}
+def test_mcq_feedback_always_names_the_key_not_the_llm():
+    """Q01-class bug: the LLM agreed the answer was wrong (score 0) but its
+    prose named a *different* correct letter ("The correct answer is C" when
+    the key is A). MCQ comments must be built from the answer key, never the
+    LLM's free text."""
+    exs = _fixture_exercises()  # q0 correct = A, option A text = "right"
+    answers = {0: "B"}  # wrong
     payload = {
         "per_question": [
-            # correct, but LLM judged it wrong → contradiction → override
-            {"index": 0, "score": 0, "feedback": "你选错了，正确答案不是 A"},
-            # correct, LLM agrees → keep its explanation
-            {"index": 1, "score": 100, "feedback": "对，因为 B 满足定义"},
-            # wrong, LLM agrees → keep its explanation
-            {"index": 2, "score": 0, "feedback": "这里混淆了概念"},
+            {"index": 0, "score": 0, "feedback": "The correct answer is C."},
+            {"index": 1, "score": 0, "feedback": "fb1"},
+            {"index": 2, "score": 0, "feedback": "fb2"},
             {"index": 3, "score": 80, "feedback": "fb3"},
             {"index": 4, "score": 80, "feedback": "fb4"},
         ],
@@ -255,32 +253,71 @@ def test_mcq_feedback_consistent_with_deterministic_verdict():
     }
     parsed = grader._GradeSchema.model_validate(payload)
     out = grader._override_mcq_scores(exs, answers, parsed.per_question)
+    fb = {q["index"]: q["feedback"] for q in out}
+    assert out[0]["score"] == 0
+    assert "A" in fb[0] and "right" in fb[0]  # the key's label + its text
+    assert "C" not in fb[0]  # never echoes the LLM's wrong letter
+    # short-answer feedback still comes from the LLM
+    assert fb[3] == "fb3"
+
+
+def test_mcq_feedback_ignores_llm_prose_even_when_it_agrees():
+    """MCQ comments are always key-derived; the LLM's MCQ prose is discarded
+    even when its verdict matches. Short-answer feedback still comes from the
+    LLM."""
+    exs = _fixture_exercises()
+    answers = {0: "A", 3: "ans", 4: "ans"}  # q0 MCQ correct
+    payload = {
+        "per_question": [
+            {"index": 0, "score": 100, "feedback": "Yes, A is right because…"},
+            {"index": 1, "score": 0, "feedback": "fb1"},
+            {"index": 2, "score": 0, "feedback": "fb2"},
+            {"index": 3, "score": 80, "feedback": "fb3"},
+            {"index": 4, "score": 80, "feedback": "fb4"},
+        ],
+        "overall_feedback": "x",
+    }
+    parsed = grader._GradeSchema.model_validate(payload)
+    out = grader._override_mcq_scores(exs, answers, parsed.per_question, "en")
     by = {q["index"]: q for q in out}
-    assert by[0]["score"] == 100 and by[0]["feedback"] == "回答正确。"
-    assert by[1]["score"] == 100 and by[1]["feedback"] == "对，因为 B 满足定义"
-    assert by[2]["score"] == 0 and by[2]["feedback"] == "这里混淆了概念"
-    # short answers always keep the LLM feedback
-    assert by[3]["feedback"] == "fb3"
+    assert by[0]["score"] == 100
+    assert by[0]["feedback"] == "Correct. The answer is A: right."
+    assert "because" not in by[0]["feedback"]  # LLM prose discarded
+    assert by[3]["feedback"] == "fb3"  # short-answer keeps the LLM feedback
 
 
 def test_mcq_feedback_deterministic_line_is_localized():
-    exs = _fixture_exercises()
-    answers = {0: "X"}  # wrong (correct is A); LLM contradicts with score 100
+    exs = _fixture_exercises()  # q0 correct = A, option A text = "right"
+    answers = {0: "B"}  # wrong
     payload = {
-        "per_question": [
-            {"index": 0, "score": 100, "feedback": "looks right"},
-            {"index": 1, "score": 0, "feedback": "fb1"},
-            {"index": 2, "score": 0, "feedback": "fb2"},
-            {"index": 3, "score": 0, "feedback": "fb3"},
-            {"index": 4, "score": 0, "feedback": "fb4"},
-        ],
+        "per_question": [{"index": i, "score": 0, "feedback": "x"} for i in range(5)],
         "overall_feedback": "x",
     }
     parsed = grader._GradeSchema.model_validate(payload)
     out_en = grader._override_mcq_scores(exs, answers, parsed.per_question, "en")
     out_zh = grader._override_mcq_scores(exs, answers, parsed.per_question, "zh")
-    assert out_en[0]["feedback"] == "Incorrect. The correct answer is A."
-    assert out_zh[0]["feedback"] == "回答错误，正确答案是 A。"
+    assert out_en[0]["feedback"] == "Incorrect. The correct answer is A: right."
+    assert out_zh[0]["feedback"] == "回答错误，正确答案是 A：right。"
+
+
+def test_mcq_feedback_falls_back_to_label_without_options():
+    """Legacy/option-less MCQ rows must not crash; the comment degrades to
+    just the correct label."""
+    legacy = [
+        {"type": "mcq", "question": "Q?", "correct_answer": "A"},
+        {"type": "mcq", "question": "Q2?", "correct_answer": "B"},
+    ]
+    payload = {
+        "per_question": [
+            {"index": 0, "score": 0, "feedback": "x"},
+            {"index": 1, "score": 0, "feedback": "x"},
+        ],
+        "overall_feedback": "x",
+    }
+    parsed = grader._GradeSchema.model_validate(payload)
+    out = grader._override_mcq_scores(legacy, {0: "B", 1: "B"}, parsed.per_question, "en")
+    assert out[0]["feedback"] == "Incorrect. The correct answer is A."
+    assert out[1]["feedback"] == "Correct. The answer is B."
 
 
 async def test_call_llm_grade_retries_once_on_bad_output(monkeypatch):

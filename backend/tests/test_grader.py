@@ -234,6 +234,55 @@ def test_override_mcq_handles_missing_or_empty_answer():
     assert by_idx[4] == 60
 
 
+def test_mcq_feedback_consistent_with_deterministic_verdict():
+    """MCQ comment must never contradict the deterministic ✓/✗: keep the
+    LLM's explanation only when its score agrees with the answer key."""
+    exs = _fixture_exercises()
+    # q0 correct (A), q1 correct (B), q2 wrong ("X" vs C)
+    answers = {0: "A", 1: "B", 2: "X", 3: "ans", 4: "ans"}
+    payload = {
+        "per_question": [
+            # correct, but LLM judged it wrong → contradiction → override
+            {"index": 0, "score": 0, "feedback": "你选错了，正确答案不是 A"},
+            # correct, LLM agrees → keep its explanation
+            {"index": 1, "score": 100, "feedback": "对，因为 B 满足定义"},
+            # wrong, LLM agrees → keep its explanation
+            {"index": 2, "score": 0, "feedback": "这里混淆了概念"},
+            {"index": 3, "score": 80, "feedback": "fb3"},
+            {"index": 4, "score": 80, "feedback": "fb4"},
+        ],
+        "overall_feedback": "x",
+    }
+    parsed = grader._GradeSchema.model_validate(payload)
+    out = grader._override_mcq_scores(exs, answers, parsed.per_question)
+    by = {q["index"]: q for q in out}
+    assert by[0]["score"] == 100 and by[0]["feedback"] == "回答正确。"
+    assert by[1]["score"] == 100 and by[1]["feedback"] == "对，因为 B 满足定义"
+    assert by[2]["score"] == 0 and by[2]["feedback"] == "这里混淆了概念"
+    # short answers always keep the LLM feedback
+    assert by[3]["feedback"] == "fb3"
+
+
+def test_mcq_feedback_deterministic_line_is_localized():
+    exs = _fixture_exercises()
+    answers = {0: "X"}  # wrong (correct is A); LLM contradicts with score 100
+    payload = {
+        "per_question": [
+            {"index": 0, "score": 100, "feedback": "looks right"},
+            {"index": 1, "score": 0, "feedback": "fb1"},
+            {"index": 2, "score": 0, "feedback": "fb2"},
+            {"index": 3, "score": 0, "feedback": "fb3"},
+            {"index": 4, "score": 0, "feedback": "fb4"},
+        ],
+        "overall_feedback": "x",
+    }
+    parsed = grader._GradeSchema.model_validate(payload)
+    out_en = grader._override_mcq_scores(exs, answers, parsed.per_question, "en")
+    out_zh = grader._override_mcq_scores(exs, answers, parsed.per_question, "zh")
+    assert out_en[0]["feedback"] == "Incorrect. The correct answer is A."
+    assert out_zh[0]["feedback"] == "回答错误，正确答案是 A。"
+
+
 async def test_call_llm_grade_retries_once_on_bad_output(monkeypatch):
     calls = {"n": 0}
 

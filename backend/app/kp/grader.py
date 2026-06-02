@@ -149,22 +149,66 @@ async def _call_llm_grade(
     raise ValueError(f"评分 LLM 输出不合规：{last_err}")
 
 
+# Deterministic MCQ comment, used when the LLM's verdict contradicts the
+# answer key (or the LLM omitted the entry). MCQ correctness is decided by
+# the key, so its comment must be decided the same way — otherwise the
+# on-screen comment can argue the opposite of the ✓/✗ the student sees.
+_MCQ_VERDICT = {
+    "zh": {
+        "correct": "回答正确。",
+        "incorrect": "回答错误，正确答案是 {correct}。",
+    },
+    "en": {
+        "correct": "Correct.",
+        "incorrect": "Incorrect. The correct answer is {correct}.",
+    },
+}
+
+
+def _mcq_feedback(
+    llm_grade: _PerQuestionGrade | None,
+    *,
+    is_correct: bool,
+    correct_answer: str,
+    lang: str,
+) -> str:
+    # Keep the LLM's explanation only when its verdict matches the
+    # deterministic one; a score on the wrong side of 50 means it judged
+    # the answer the opposite way, so its prose would contradict the score.
+    if llm_grade is not None and (llm_grade.score >= 50) == is_correct:
+        return llm_grade.feedback
+    table = _MCQ_VERDICT.get(lang, _MCQ_VERDICT["zh"])
+    return table["correct" if is_correct else "incorrect"].format(
+        correct=correct_answer
+    )
+
+
 def _override_mcq_scores(
     exercises: list[dict[str, Any]],
     answers_by_index: dict[int, str],
     llm_per_question: list[_PerQuestionGrade],
+    lang: str = "zh",
 ) -> list[dict[str, Any]]:
-    """For MCQ entries, ignore the LLM's score and use deterministic 0/100."""
+    """For MCQ entries, ignore the LLM's score and use deterministic 0/100.
+    The MCQ comment is likewise made consistent with that score (see
+    _mcq_feedback) so a wrong LLM judgment can't contradict the ✓/✗."""
     by_idx = {p.index: p for p in llm_per_question}
     out: list[dict[str, Any]] = []
     for i, ex in enumerate(exercises):
         llm_grade = by_idx.get(i)
-        feedback = llm_grade.feedback if llm_grade is not None else ""
         if ex["type"] == "mcq":
             student = (answers_by_index.get(i) or "").strip().upper()
-            score = 100 if student == ex["correct_answer"] else 0
+            is_correct = student == ex["correct_answer"]
+            score = 100 if is_correct else 0
+            feedback = _mcq_feedback(
+                llm_grade,
+                is_correct=is_correct,
+                correct_answer=ex["correct_answer"],
+                lang=lang,
+            )
         else:
             score = llm_grade.score if llm_grade is not None else 0
+            feedback = llm_grade.feedback if llm_grade is not None else ""
         out.append({"index": i, "score": score, "feedback": feedback})
     return out
 
@@ -220,7 +264,8 @@ async def grade_submission(submission_id: uuid.UUID) -> None:
                 exercises, answers_by_index, api_settings
             )
             per_question = _override_mcq_scores(
-                exercises, answers_by_index, llm_grade.per_question
+                exercises, answers_by_index, llm_grade.per_question,
+                lang_of(api_settings),
             )
             weighted_sum = sum(
                 q["score"] * _GRADE_WEIGHTS.get(ex["type"], 1)

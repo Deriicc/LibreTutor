@@ -490,7 +490,12 @@ async def post_assessment(
             detail=f"评估失败：{exc}",
         ) from exc
 
-    if row.covered or row.partial:
+    # Pre-warm the exercise set, but only when none exists yet for this
+    # attempt. The set is write-once per (kp_id, attempt), so re-running the
+    # assessment can never change it — spawning another tailor would just
+    # burn an LLM call generating a set that `materialize` discards.
+    existing_set = await db.get(KPExerciseSet, (kp_id, kp.current_attempt))
+    if (row.covered or row.partial) and existing_set is None:
         page_start, page_end = _kp_pages(kp)
         _spawn_tailor(
             kp_id=kp_id,

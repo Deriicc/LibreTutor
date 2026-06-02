@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { runAssessment, AssessmentError } from "../api/assessment";
 import type { Assessment } from "../api/assessment";
@@ -105,25 +105,29 @@ export function AssessmentPage() {
   }>();
   const navigate = useNavigate();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
+  // POST /assessment is non-idempotent (re-runs the LLM + spawns a tailor),
+  // so two concurrent runs can produce two different question counts. Guard
+  // against React StrictMode's double-effect (and re-mounts) by firing at
+  // most once per (courseId, kpId).
+  const startedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!courseId || !kpId) return;
-    let cancelled = false;
+    const key = `${courseId}/${kpId}`;
+    if (startedKeyRef.current === key) return;
+    startedKeyRef.current = key;
     setState({ kind: "loading" });
     runAssessment(courseId, kpId)
       .then((a) => {
-        if (cancelled) return;
+        if (startedKeyRef.current !== key) return;
         setState({ kind: "ready", assessment: a });
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (startedKeyRef.current !== key) return;
         const msg =
           err instanceof AssessmentError ? err.message : t("评估失败");
         setState({ kind: "error", message: msg });
       });
-    return () => {
-      cancelled = true;
-    };
   }, [courseId, kpId]);
 
   function handleStart() {

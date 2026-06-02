@@ -424,10 +424,14 @@ async def materialize_kp_exercise_set(
         "count": count,
     }
     stmt = pg_insert(KPExerciseSet).values(**values)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["kp_id", "attempt"],
-        set_={k: v for k, v in values.items() if k not in ("kp_id", "attempt")},
-    )
+    # Write-once: the FIRST committer owns (kp_id, attempt). The early
+    # `existing` check above is racy — concurrent tailors (two background
+    # spawns from duplicate assessments + the lazy /exercise-set tailor) can
+    # all pass it, generate independently, and otherwise overwrite each
+    # other. `do_nothing` makes every loser a no-op; the re-read below then
+    # returns the winner's row for every racer, so the set a student
+    # rendered is exactly the set their submission is graded against.
+    stmt = stmt.on_conflict_do_nothing(index_elements=["kp_id", "attempt"])
     await db.execute(stmt)
     await db.commit()
 

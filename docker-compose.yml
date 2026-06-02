@@ -1,6 +1,6 @@
 # Self-hosted production stack (Debian 13 + Docker Compose + Caddy).
 # Reuses the repo Dockerfile as-is. Railway is unaffected — it ignores
-# this file. See DEPLOY.server.md for the step-by-step.
+# this file. See README.md for the step-by-step deployment guide.
 #
 #   cp .env.example .env   # then fill it in
 #   docker compose up -d --build

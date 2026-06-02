@@ -66,7 +66,7 @@ status: superseded by 0027
 - production 下禁止 `CORS_ORIGINS=["*"]`。
 - 登录 10/min、注册 5/min 的 per-IP rate limit。
 - Settings test-chat/test-embedding 必须登录。
-- 生产部署 checklist 写入 `DEPLOY.md`。
+- 生产部署说明写入 `README.md`。
 
 ## Consequences
 
